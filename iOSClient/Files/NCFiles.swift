@@ -53,26 +53,28 @@ class NCFiles: NCCollectionViewCommon {
             self.serverUrl = utilityFileSystem.getHomeServer(session: session)
             self.titleCurrentFolder = getNavigationTitle()
 
-            NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: NCGlobal.shared.notificationCenterChangeUser), object: nil, queue: nil) { notification in
-                Task { @MainActor in
-                    if let userInfo = notification.userInfo,
-                       let controller = userInfo["controller"] as? NCMainTabBarController {
+            NotificationCenter.default.addObserver(forName: NSNotification.Name(rawValue: NCGlobal.shared.notificationCenterChangeUser), object: nil, queue: .main) { notification in
+                MainActor.assumeIsolated {
+                    guard let userInfo = notification.userInfo,
+                          let account = userInfo["account"] as? String,
+                          self.controller?.account == account else {
+                        return
+                    }
+                    if let controller = userInfo["controller"] as? NCMainTabBarController {
                         guard controller == self.controller else {
                             return
                         }
                     }
-                    if let userInfo = notification.userInfo,
-                       let account = userInfo["account"] as? String {
-                        // re-tint the + button for the new account
-                        self.mainNavigationController?.menuPlus?.updatePlusButtonEnabled(session: NCSession.shared.getSession(account: account))
-                    }
+                    let session = NCSession.shared.getSession(account: account)
+                    self.mainNavigationController?.menuPlusButton.menu = nil
+                    self.mainNavigationController?.menuPlusButton.isEnabled = false
 
+                    self.serverUrl = self.utilityFileSystem.getHomeServer(session: session)
                     self.navigationController?.popToRootViewController(animated: false)
-                    self.serverUrl = self.utilityFileSystem.getHomeServer(session: self.session)
                     self.isSearchingMode = false
                     self.isEditMode = false
                     self.fileSelect.removeAll()
-                    self.layoutForView = self.database.getLayoutForView(account: self.session.account, key: self.layoutKey, serverUrl: self.serverUrl)
+                    self.layoutForView = self.database.getLayoutForView(account: session.account, key: self.layoutKey, serverUrl: self.serverUrl)
 
                     if self.isLayoutList {
                         self.collectionView?.collectionViewLayout = self.listLayout
@@ -85,9 +87,12 @@ class NCFiles: NCCollectionViewCommon {
                     self.titleCurrentFolder = self.getNavigationTitle()
                     self.navigationItem.title = self.titleCurrentFolder
 
-                    await (self.navigationController as? NCMainNavigationController)?.setNavigationLeftItems()
-                    await self.reloadDataSource()
-                    await self.getServerData()
+                    Task { @MainActor in
+                        await self.mainNavigationController?.menuPlus?.create(session: session)
+                        await (self.navigationController as? NCMainNavigationController)?.setNavigationLeftItems()
+                        await self.reloadDataSource()
+                        await self.getServerData()
+                    }
                 }
             }
         }
