@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 XeniaCloud
+# SPDX-License-Identifier: MIT
+
 # XeniaCloud CI — unsigned build verification for the xenia-rebrand fork.
 # XNT-53. Build-only (no test matrix, no signing) — deliberately narrower than
 # upstream's xcode.yml, which also chains into a full Nextcloud-server-backed
