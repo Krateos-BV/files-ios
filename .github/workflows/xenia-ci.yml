@@ -8,10 +8,27 @@
 
 name: Xenia CI (unsigned build)
 
+# XNT-215: this triggered on `push: [xenia-rebrand]` until 26 Sep 2026. That branch
+# was deleted, so the workflow's only event trigger could never match again — 2 runs
+# ever, newest 2026-09-08. It survived XNT-203's rename sweep because a trigger
+# naming neither `master` nor `main` contains no literal for that sweep to grep.
+#
+# Kept rather than deleted despite upstream's xcode.yml already building `main`:
+# that build runs on the single `xcode-27` label, so if the label stops being served
+# the failure is a queued job — silence, not a red check. This job uses hosted
+# `macos-15`, making it the only `main` build signal here with an independent
+# failure mode. A weaker build on independent infrastructure beats a stronger one
+# behind the same single point of failure.
+#
+# XNT-215: `pull_request:` carries no `paths:` filter, deliberately. GitHub cannot
+# distinguish a required status check that never ran from one still pending — it
+# blocks the PR indefinitely either way, with no diagnostic. So a `paths:`-filtered
+# or push-only check must never be made required. Every PR compiles even when only
+# docs changed; that is the price of a signal that cannot silently go missing.
 on:
   push:
-    branches:
-      - xenia-rebrand
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
