@@ -41,12 +41,17 @@ permissions:
 env:
   PROJECT: Nextcloud.xcodeproj
   SCHEME: Nextcloud
-  XCODE_VERSION: "26.0.1"
+  # Bumped from 26.0.1: the project's SPM graph now needs Swift tools 6.3.0
+  # (gzipswift 7.0.0, arrived 2026-09-19 via upstream sync). 26.0.1 ships Swift
+  # 6.2.0, so package resolution failed outright. 26.6 is the newest Xcode on any
+  # GitHub-hosted image; if it still lacks Swift 6.3 then this fork cannot be
+  # built on hosted infrastructure at all. (XNT-215)
+  XCODE_VERSION: "26.6"
 
 jobs:
   build:
     name: Build (unsigned)
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
     - name: Checkout
