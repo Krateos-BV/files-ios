@@ -19,10 +19,10 @@
     {
       "layers" : [
         {
-          "image-name" : "Nextcloud-logo-white.svg",
-          "name" : "Nextcloud-logo-white",
+          "image-name" : "Xenia-cloud-white.svg",
+          "name" : "Xenia-cloud-white",
           "position" : {
-            "scale" : 6.8,
+            "scale" : 3.5,
             "translation-in-points" : [
               0,
               0
