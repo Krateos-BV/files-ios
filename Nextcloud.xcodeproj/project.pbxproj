@@ -513,13 +513,6 @@
 		F760A48E2FE95D06001B212E /* NCTransferDelegateDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4892FE95D04001B212E /* NCTransferDelegateDispatcher.swift */; };
 		F760A48F2FE95D06001B212E /* NCTransferDelegateDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4892FE95D04001B212E /* NCTransferDelegateDispatcher.swift */; };
 		F760A4902FE95D06001B212E /* NCTransferDelegateDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4892FE95D04001B212E /* NCTransferDelegateDispatcher.swift */; };
-		F760A4922FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
-		F760A4932FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
-		F760A4942FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
-		F760A4952FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
-		F760A4962FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
-		F760A4972FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
-		F760A4982FE95D33001B212E /* NetworkingTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F760A4912FE95D30001B212E /* NetworkingTasks.swift */; };
 		F760DE032AE66EA80027D78A /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F760DE022AE66EA80027D78A /* KeychainAccess */; };
 		F760DE052AE66EBE0027D78A /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F760DE042AE66EBE0027D78A /* KeychainAccess */; };
 		F760DE072AE66EC70027D78A /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F760DE062AE66EC70027D78A /* KeychainAccess */; };
@@ -1686,7 +1679,6 @@
 		F75DD768290ABB25002EB562 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.intentdefinition; name = Base; path = Base.lproj/Intent.intentdefinition; sourceTree = "<group>"; };
 		F760A4852FE959EB001B212E /* NCTransferCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCTransferCoordinator.swift; sourceTree = "<group>"; };
 		F760A4892FE95D04001B212E /* NCTransferDelegateDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCTransferDelegateDispatcher.swift; sourceTree = "<group>"; };
-		F760A4912FE95D30001B212E /* NetworkingTasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkingTasks.swift; sourceTree = "<group>"; };
 		F761856629E98543006EB3B0 /* NCIntro.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = NCIntro.storyboard; sourceTree = "<group>"; };
 		F761856729E98543006EB3B0 /* NCIntroViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NCIntroViewController.swift; sourceTree = "<group>"; };
 		F761856829E98543006EB3B0 /* NCIntroCollectionViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NCIntroCollectionViewCell.swift; sourceTree = "<group>"; };
@@ -2985,7 +2977,6 @@
 				F760A4852FE959EB001B212E /* NCTransferCoordinator.swift */,
 				F7CAFE1C2F17A34F00DB35A5 /* ProgressQuantizer.swift */,
 				F760A4892FE95D04001B212E /* NCTransferDelegateDispatcher.swift */,
-				F760A4912FE95D30001B212E /* NetworkingTasks.swift */,
 			);
 			path = Actors;
 			sourceTree = "<group>";
@@ -3831,6 +3822,7 @@
 				F78DB20E3040239E00E6FE24 /* BackgroundUploadExtension */,
 				F7FC7D651DC1F98700BB2C6A /* Products */,
 				F30A962A2A27A9C800D7BCFE /* Tests */,
+				F7F1FBA62E27D13700C79E20 /* Frameworks */,
 				F771E3D020E2392D00AFB62D /* File Provider Extension.appex */,
 				2C33C47F23E2C475005F963B /* Notification Service Extension.appex */,
 				AF8ED1F92757821000B8DBC4 /* NextcloudUnitTests.xctest */,
@@ -3839,7 +3831,6 @@
 				F70716E32987F81500E72C1D /* File Provider Extension UI.appex */,
 				C04E2F202A17BB4D001BAD85 /* NextcloudIntegrationTests.xctest */,
 				C0046CDA2A17B98400D87C9D /* NextcloudUITests.xctest */,
-				F7F1FBA62E27D13700C79E20 /* Frameworks */,
 				F31165012F9674A1009A1E37 /* AppIcon.icon */,
 				F7C55C7A2FB5AEF7004A974F /* Action Assistant.appex */,
 				F7FB188030401D0D00EB0AE6 /* BackgroundUploadExtension.appex */,
@@ -4184,8 +4175,8 @@
 				F77B0F981D118A16002130FE /* Embed Foundation Extensions */,
 				AFBFD01327551A54002244BC /* ShellScript */,
 				F76DA934277B75710082465B /* Embed Frameworks */,
-				F76995F02F99EF6C00291FA7 /* Crashlytics dSYM Upload */,
 				F721C7FE3040345700DD9D36 /* CopyFiles */,
+				F76995F02F99EF6C00291FA7 /* Crashlytics dSYM Upload */,
 			);
 			buildRules = (
 			);
@@ -4709,7 +4700,6 @@
 				F75F4BC62FD008D7009E55ED /* Optional+Extension.swift in Sources */,
 				F73EF7C52B02250B0087E6E9 /* NCManageDatabase+GPS.swift in Sources */,
 				2C1D5D7923E2DE9100334ABB /* NCBrand.swift in Sources */,
-				F760A4922FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F770768A263A8A2500A1BA94 /* NCUtilityFileSystem.swift in Sources */,
 				F77E8C1F2E79717D00EAE68F /* NCManageDatabase+LivePhoto.swift in Sources */,
 				F7D7A7712DCDD437003D2007 /* NCManageDatabase+AutoUpload.swift in Sources */,
@@ -4830,7 +4820,6 @@
 				A1E2EE010000000000000003 /* NCEndToEndKeySet.swift in Sources */,
 				F70716E62987F81500E72C1D /* DocumentActionViewController.swift in Sources */,
 				F763412A2EBE10F00056F538 /* NCUtilityFileSystem.swift in Sources */,
-				F760A4942FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F7F1FB9E2E27CE7200C79E20 /* NCNetworking.swift in Sources */,
 				F77DD6AD2C5CC093009448FB /* NCSession.swift in Sources */,
 				F76340F92EBDE9760056F538 /* NCManageDatabaseCore.swift in Sources */,
@@ -4928,7 +4917,6 @@
 				F7D4BF392CA2E8D800A5E746 /* TOPasscodeCircleView.m in Sources */,
 				F7D4BF3A2CA2E8D800A5E746 /* TOPasscodeViewContentLayout.m in Sources */,
 				F79792482F5EECE100FE9544 /* Font+Extension.swift in Sources */,
-				F760A4932FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F7D61EBF2EBF1878007F865B /* NCManageDatabase+Tag.swift in Sources */,
 				F7D4BF3B2CA2E8D800A5E746 /* TOPasscodeSettingsKeypadButton.m in Sources */,
 				F7D4BF3C2CA2E8D800A5E746 /* TOPasscodeViewController.m in Sources */,
@@ -5017,7 +5005,6 @@
 				F783030228B4C4B800B84583 /* NCUtility.swift in Sources */,
 				F7E250002FE1000000000004 /* NCDocumentEditorSupport.swift in Sources */,
 				F711D63128F44801003F43C8 /* IntentHandler.swift in Sources */,
-				F760A4952FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F76DEE9728F808AF0041B1C9 /* LockscreenData.swift in Sources */,
 				F7BDC1D6300F440A00C5D9FA /* NCManageDatabase+MediaPreviewBackfill.swift in Sources */,
 				F72EA95A28B7BD0D00C88F0C /* FilesWidgetView.swift in Sources */,
@@ -5100,7 +5087,6 @@
 				F75F4BC42FD008D7009E55ED /* Optional+Extension.swift in Sources */,
 				F7CAFE212F17A37C00DB35A5 /* ProgressQuantizer.swift in Sources */,
 				F76340EE2EBDE74C0056F538 /* NCManageDatabase.swift in Sources */,
-				F760A4972FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F763410A2EBDFCB10056F538 /* NCManageDatabase+CreateMetadata.swift in Sources */,
 				F7E742F72EC0A4CD00E2362A /* NCManageDatabase+LocalFile.swift in Sources */,
 				F7E742F52EC0A3DD00E2362A /* NCManageDatabase+Directory.swift in Sources */,
@@ -5333,7 +5319,6 @@
 				F72EC7242F45C81600A2135C /* NotificationCenter+Extension.swift in Sources */,
 				F389C9F52CEE383300049762 /* SelectAlbumView.swift in Sources */,
 				F7B6B70427C4E7FA00A7F6EB /* NCScan+CollectionView.swift in Sources */,
-				F760A4962FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F7816EF22C2C3E1F00A52517 /* NCPushNotification.swift in Sources */,
 				F76882342C0DD1E7001CF441 /* NCDisplayView.swift in Sources */,
 				F7C30DF6291BC0CA0017149B /* NCNetworkingE2EEUpload.swift in Sources */,
@@ -5590,7 +5575,6 @@
 				F7A8D73528F17E16008BBE1C /* NCManageDatabase.swift in Sources */,
 				F3F442F02DDE2A7700FD701F /* NCMetadataPermissions.swift in Sources */,
 				F7A8D74428F1827B008BBE1C /* ThreadSafeDictionary.swift in Sources */,
-				F760A4982FE95D33001B212E /* NetworkingTasks.swift in Sources */,
 				F7C9739528F17131002C43E2 /* IntentHandler.swift in Sources */,
 				F7A8D73D28F181D3008BBE1C /* NCUtilityFileSystem.swift in Sources */,
 				F73EF7E12B02266D0087E6E9 /* NCManageDatabase+Trash.swift in Sources */,
@@ -6706,7 +6690,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = NKUJUXUJ3B;
@@ -6774,7 +6758,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = NKUJUXUJ3B;
@@ -6826,7 +6810,7 @@
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Brand//BackgroundUploadExtension.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Brand/BackgroundUploadExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -6841,7 +6825,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(BUILD_DIR)/../../SourcePackages/checkouts/realm-swift/include";
-				INFOPLIST_FILE = "$(SRCROOT)/Brand//BackgroundUploadExtension.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Brand/BackgroundUploadExtension.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = BackgroundUploadExtension;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -6877,7 +6861,7 @@
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Brand//BackgroundUploadExtension.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Brand/BackgroundUploadExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -6891,8 +6875,12 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(BUILD_DIR)/../../SourcePackages/checkouts/realm-swift/include";
-				INFOPLIST_FILE = "$(SRCROOT)/Brand//BackgroundUploadExtension.plist";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(BUILD_DIR)/../../SourcePackages/checkouts/realm-swift/include",
+					"$(BUILD_DIR)/../../../../../SourcePackages/checkouts/realm-swift/include",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/Brand/BackgroundUploadExtension.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = BackgroundUploadExtension;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (

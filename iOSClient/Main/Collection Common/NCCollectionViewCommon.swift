@@ -58,6 +58,7 @@ class NCCollectionViewCommon: UIViewController, NCAccountSettingsModelDelegate, 
 
     internal var tipViewAccounts: EasyTipView?
     internal var syncMetadatasTask: Task<Void, Never>?
+    internal var syncMetadataNetworkTask: URLSessionTask?
 
     // Edit Menu
     //
@@ -194,6 +195,7 @@ class NCCollectionViewCommon: UIViewController, NCAccountSettingsModelDelegate, 
         self.navigationController?.presentationController?.delegate = self
         collectionView.alwaysBounceVertical = true
         collectionView.accessibilityIdentifier = "NCCollectionViewCommon"
+        collectionView.hideTopScrollEdgeEffect()
 
         view.backgroundColor = .systemBackground
         collectionView.backgroundColor = .systemBackground
