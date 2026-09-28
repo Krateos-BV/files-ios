@@ -50,10 +50,18 @@ SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # The Nextcloud name and logo are trademarks; see LICENSES/LicenseRef-NextcloudTrademarks.txt
 [[annotations]]
-path = ["AppIcon.icon/**", "Brand/Custom.xcassets/AppIcon.appiconset/**", "Brand/Custom.xcassets/logo.imageset/**", "Action Assistant/Images.xcassets/AppIcon.appiconset/**", "Widget/Assets.xcassets/AppIcon.imageset/**", "iOSClient/Images.xcassets/logo.imageset/**"]
+path = ["Action Assistant/Images.xcassets/AppIcon.appiconset/**", "Widget/Assets.xcassets/AppIcon.imageset/**", "iOSClient/Images.xcassets/logo.imageset/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Nextcloud GmbH"
 SPDX-License-Identifier = "LicenseRef-NextcloudTrademarks"
+
+# Redrawn from scratch for XNT-222: the Xenia Files cloud glyph, not the
+# Nextcloud trademark mark it replaced (AppIcon, launch screen and login logo).
+[[annotations]]
+path = ["AppIcon.icon/**", "Brand/Custom.xcassets/AppIcon.appiconset/**", "Brand/Custom.xcassets/logo.imageset/**", "Brand/Custom.xcassets/intro1.imageset/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 XeniaCloud"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
 
 [[annotations]]
 path = ["iOSClient/Utility/TOPasscodeViewController/**"]

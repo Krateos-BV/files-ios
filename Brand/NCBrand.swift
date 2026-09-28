@@ -60,17 +60,17 @@ struct NextcloudVersion: Comparable {
 final class NCBrandOptions: @unchecked Sendable {
     static let shared = NCBrandOptions()
 
-    var brand: String = "Nextcloud"
-    var brandUserAgent: String = ""
-    var textCopyrightNextcloudiOS: String = "Nextcloud Matheria for iOS %@ © 2026"
+    var brand: String = "Xenia Files"
+    var brandUserAgent: String = "Xenia"
+    var textCopyrightNextcloudiOS: String = "Xenia Files for iOS %@ © 2026"
     var textCopyrightNextcloudServer: String = "Nextcloud Server %@"
-    var loginBaseUrl: String = "https://cloud.nextcloud.com"
+    var loginBaseUrl: String = "https://portal.xeniacloud.eu"
     var pushNotificationServerProxy: String = ""
-    var linkLoginHost: String = "https://nextcloud.com/install"
-    var linkloginPreferredProviders: String = "https://nextcloud.com/signup-ios"
+    var linkLoginHost: String = "https://xeniacloud.eu"
+    var linkloginPreferredProviders: String = "https://xeniacloud.eu"
     var webLoginAutenticationProtocol: String = "nc://"                                        // example "abc://"
-    var privacy: String = "https://nextcloud.com/privacy"
-    var sourceCode: String = "https://github.com/nextcloud/ios"
+    var privacy: String = "https://xeniacloud.eu/privacy-policy/"
+    var sourceCode: String = "https://github.com/Krateos-BV/files-ios"
     var mobileconfig: String = "/remote.php/dav/provisioning/apple-provisioning.mobileconfig"
     var appStoreUrl: String = "https://apps.apple.com/in/app/nextcloud/id1125420102"
 
@@ -87,8 +87,12 @@ final class NCBrandOptions: @unchecked Sendable {
     // Use server theming color
     var use_themingColor: Bool = true
 
-    var disable_intro: Bool = false
-    var disable_request_login_url: Bool = false
+    // XeniaCloud is a single-tenant white-label client (same call as talk-ios's XNT-59):
+    // there's only ever one valid server, so the upstream marketing intro (Sign Up /
+    // Host your own server, both pointing at nextcloud.com) is skipped and the login
+    // screen's server field is pre-filled and locked to loginBaseUrl below.
+    var disable_intro: Bool = true
+    var disable_request_login_url: Bool = true
     var disable_multiaccount: Bool = false
     var disable_more_external_site: Bool = false
     var disable_openin_file: Bool = false                                                       // Don't touch me !!
@@ -156,8 +160,11 @@ final class NCBrandOptions: @unchecked Sendable {
             }
         }
 
-        if pushNotificationServerProxy.isEmpty,
-            brand == "Nextcloud" {
+        // Push proxy infra, not branding (same call as talk-ios's XNT-59): the backend
+        // is still Nextcloud Server, so its push relay is what our server capabilities
+        // advertise. Previously gated on brand == "Nextcloud"; that gate broke once the
+        // brand string changed, so it's unconditional now.
+        if pushNotificationServerProxy.isEmpty {
             pushNotificationServerProxy = "https://push-notifications.nextcloud.com"
             // DEBUG SERVER PUSH
             // pushNotificationServerProxy = "https://c0004.customerpush.nextcloud.com"
