@@ -1,0 +1,316 @@
+# SPDX-FileCopyrightText: 2026 XeniaCloud
+# SPDX-License-Identifier: MIT
+
+# XeniaCloud release pipeline — XNT-241.
+#
+# Builds a signed archive, exports an .ipa, and uploads it to App Store
+# Connect / TestFlight. Mirrors talk-ios's xenia-release.yml (XNT-213),
+# which is the first proven-working pattern in this estate: automatic
+# signing via the ASC API key for Archive, then a manually-created App
+# Store distribution profile per target installed and referenced
+# explicitly for Export (Cloud Managed Signing cannot create a genuine
+# "iOS App Store" profile via API key alone -- only a Development-type
+# one, confirmed the hard way on talk-ios).
+#
+# Unlike talk-ios, this project has no CocoaPods (Swift Package Manager
+# only, resolved via Nextcloud.xcodeproj/project.xcworkspace), and existing
+# CI (xcode.yml) still targets the self-hosted xcode-27 runner, so this
+# workflow does too rather than assuming XNT-229 cleared that requirement
+# for every workflow in this repo.
+#
+# Secrets: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8,
+# APPLE_DIST_CERT_P12, APPLE_DIST_CERT_PASSWORD are already org-level
+# secrets scoped to this repo (shared with talk-ios/notes-ios/files-ios).
+# APPLE_PROFILE_FILES and the 8 per-extension profile secrets do NOT exist
+# yet at the time this workflow was written -- see XNT-241 for exactly
+# what's needed from Vasilis before this can go past the profile-install
+# step.
+
+name: Xenia Release (signed archive + TestFlight upload)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Build and export only, skip the App Store Connect upload'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PROJECT: Nextcloud.xcodeproj
+  SCHEME: Nextcloud
+  # xcode.yml (the existing unsigned CI build) still targets xcode-27 on the
+  # self-hosted runner -- nothing indicates that requirement has been lifted
+  # for this project, despite XNT-229 disabling BackgroundUploadExtension's
+  # embedding to unblock *some* hosted-runner builds. Matching current CI
+  # rather than assuming.
+  XCODE_VERSION: "27.0"
+  ARCHIVE_PATH: DerivedData/Nextcloud.xcarchive
+  EXPORT_PATH: DerivedData/export
+  KEYCHAIN_NAME: xenia-release.keychain-db
+
+jobs:
+  release:
+    name: Archive, export, and upload
+    runs-on: xcode-27
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Xcode ${{ env.XCODE_VERSION }}
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      # --- Signing identity: import the distribution certificate into a
+      # temporary, job-scoped keychain so it never touches the runner's
+      # default login keychain and is gone whether or not the job succeeds.
+      # This runner is self-hosted and persistent (unlike a GitHub-hosted
+      # ephemeral runner), so cleanup at the end matters even more here.
+      - name: Import distribution certificate into a temporary keychain
+        env:
+          APPLE_DIST_CERT_P12: ${{ secrets.APPLE_DIST_CERT_P12 }}
+          APPLE_DIST_CERT_PASSWORD: ${{ secrets.APPLE_DIST_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          CERT_PATH="$RUNNER_TEMP/dist_cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/${{ env.KEYCHAIN_NAME }}"
+
+          echo "$APPLE_DIST_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" \
+            -P "$APPLE_DIST_CERT_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          KEY_PATH="$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          echo "$ASC_KEY_P8" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Archive (signed, automatic signing via ASC API key)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail && \
+          xcodebuild archive \
+            -project "${{ env.PROJECT }}" \
+            -scheme "${{ env.SCHEME }}" \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath 'DerivedData' \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            | xcbeautify --quieter
+
+      # --- Manually-created App Store distribution profiles (XNT-241).
+      #
+      # Only the main app's profile ("Xenia Files App Store") is known to
+      # have been created in the portal as of this writing; none of the 8
+      # extension profiles exist yet, and NO profile secret at all has been
+      # added to this repo yet (confirmed: `gh api
+      # repos/Krateos-BV/files-ios/actions/secrets` returns an empty list).
+      # This step will fail at "Required profile secrets are present" until
+      # that's done -- see XNT-241 for the exact list of what's needed.
+      - name: Required profile secrets are present
+        env:
+          APPLE_PROFILE_FILES: ${{ secrets.APPLE_PROFILE_FILES }}
+          APPLE_PROFILE_FILES_ACTION_ASSISTANT: ${{ secrets.APPLE_PROFILE_FILES_ACTION_ASSISTANT }}
+          APPLE_PROFILE_FILES_BACKGROUNDUPLOAD: ${{ secrets.APPLE_PROFILE_FILES_BACKGROUNDUPLOAD }}
+          APPLE_PROFILE_FILES_FILEPROVIDER: ${{ secrets.APPLE_PROFILE_FILES_FILEPROVIDER }}
+          APPLE_PROFILE_FILES_FILEPROVIDERUI: ${{ secrets.APPLE_PROFILE_FILES_FILEPROVIDERUI }}
+          APPLE_PROFILE_FILES_NOTIFICATIONSERVICE: ${{ secrets.APPLE_PROFILE_FILES_NOTIFICATIONSERVICE }}
+          APPLE_PROFILE_FILES_SHARE: ${{ secrets.APPLE_PROFILE_FILES_SHARE }}
+          APPLE_PROFILE_FILES_WIDGET: ${{ secrets.APPLE_PROFILE_FILES_WIDGET }}
+          APPLE_PROFILE_FILES_WIDGETDASHBOARD: ${{ secrets.APPLE_PROFILE_FILES_WIDGETDASHBOARD }}
+        run: |
+          missing=0
+          for name in APPLE_PROFILE_FILES APPLE_PROFILE_FILES_ACTION_ASSISTANT APPLE_PROFILE_FILES_BACKGROUNDUPLOAD APPLE_PROFILE_FILES_FILEPROVIDER APPLE_PROFILE_FILES_FILEPROVIDERUI APPLE_PROFILE_FILES_NOTIFICATIONSERVICE APPLE_PROFILE_FILES_SHARE APPLE_PROFILE_FILES_WIDGET APPLE_PROFILE_FILES_WIDGETDASHBOARD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is empty or not available to this repository (XNT-241: create the matching App Store distribution profile in the portal and add it as this secret)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Install App Store provisioning profiles
+        env:
+          APPLE_PROFILE_FILES: ${{ secrets.APPLE_PROFILE_FILES }}
+          APPLE_PROFILE_FILES_ACTION_ASSISTANT: ${{ secrets.APPLE_PROFILE_FILES_ACTION_ASSISTANT }}
+          APPLE_PROFILE_FILES_BACKGROUNDUPLOAD: ${{ secrets.APPLE_PROFILE_FILES_BACKGROUNDUPLOAD }}
+          APPLE_PROFILE_FILES_FILEPROVIDER: ${{ secrets.APPLE_PROFILE_FILES_FILEPROVIDER }}
+          APPLE_PROFILE_FILES_FILEPROVIDERUI: ${{ secrets.APPLE_PROFILE_FILES_FILEPROVIDERUI }}
+          APPLE_PROFILE_FILES_NOTIFICATIONSERVICE: ${{ secrets.APPLE_PROFILE_FILES_NOTIFICATIONSERVICE }}
+          APPLE_PROFILE_FILES_SHARE: ${{ secrets.APPLE_PROFILE_FILES_SHARE }}
+          APPLE_PROFILE_FILES_WIDGET: ${{ secrets.APPLE_PROFILE_FILES_WIDGET }}
+          APPLE_PROFILE_FILES_WIDGETDASHBOARD: ${{ secrets.APPLE_PROFILE_FILES_WIDGETDASHBOARD }}
+        run: |
+          set -euo pipefail
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+
+          install_profile() {
+            local name="$1" b64="$2"
+            local tmp_profile tmp_plist uuid
+            tmp_profile=$(mktemp)
+            tmp_plist=$(mktemp)
+            echo "$b64" | base64 --decode > "$tmp_profile"
+            security cms -D -i "$tmp_profile" > "$tmp_plist"
+            uuid=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$tmp_plist")
+            cp "$tmp_profile" "$PROFILES_DIR/$uuid.mobileprovision"
+            rm -f "$tmp_profile" "$tmp_plist"
+            echo "Installed $name -> $uuid.mobileprovision"
+          }
+
+          install_profile "Xenia Files App Store" "$APPLE_PROFILE_FILES"
+          install_profile "Xenia Files Action Assistant App Store" "$APPLE_PROFILE_FILES_ACTION_ASSISTANT"
+          install_profile "Xenia Files BackgroundUploadExtension App Store" "$APPLE_PROFILE_FILES_BACKGROUNDUPLOAD"
+          install_profile "Xenia Files File Provider Extension App Store" "$APPLE_PROFILE_FILES_FILEPROVIDER"
+          install_profile "Xenia Files File Provider Extension UI App Store" "$APPLE_PROFILE_FILES_FILEPROVIDERUI"
+          install_profile "Xenia Files Notification Service Extension App Store" "$APPLE_PROFILE_FILES_NOTIFICATIONSERVICE"
+          install_profile "Xenia Files Share App Store" "$APPLE_PROFILE_FILES_SHARE"
+          install_profile "Xenia Files Widget App Store" "$APPLE_PROFILE_FILES_WIDGET"
+          install_profile "Xenia Files WidgetDashboardIntentHandler App Store" "$APPLE_PROFILE_FILES_WIDGETDASHBOARD"
+
+      - name: Write ExportOptions.plist
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>eu.xeniacloud.files</key>
+              <string>Xenia Files App Store</string>
+              <key>eu.xeniacloud.files.Action-Assistant</key>
+              <string>Xenia Files Action Assistant App Store</string>
+              <key>eu.xeniacloud.files.BackgroundUploadExtension</key>
+              <string>Xenia Files BackgroundUploadExtension App Store</string>
+              <key>eu.xeniacloud.files.File-Provider-Extension</key>
+              <string>Xenia Files File Provider Extension App Store</string>
+              <key>eu.xeniacloud.files.File-Provider-Extension-UI</key>
+              <string>Xenia Files File Provider Extension UI App Store</string>
+              <key>eu.xeniacloud.files.Notification-Service-Extension</key>
+              <string>Xenia Files Notification Service Extension App Store</string>
+              <key>eu.xeniacloud.files.Share</key>
+              <string>Xenia Files Share App Store</string>
+              <key>eu.xeniacloud.files.Widget</key>
+              <string>Xenia Files Widget App Store</string>
+              <key>eu.xeniacloud.files.WidgetDashboardIntentHandler</key>
+              <string>Xenia Files WidgetDashboardIntentHandler App Store</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+          echo "EXPORT_OPTIONS_PATH=$RUNNER_TEMP/ExportOptions.plist" >> "$GITHUB_ENV"
+
+      - name: Export .ipa
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail && \
+          xcodebuild -exportArchive \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
+            -exportPath "${{ env.EXPORT_PATH }}" \
+            -exportOptionsPlist "$EXPORT_OPTIONS_PATH" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify --quieter
+
+      - name: Locate exported .ipa
+        run: find "${{ env.EXPORT_PATH }}" -maxdepth 1 -type f -name "*.ipa"
+
+      - name: Upload .ipa build artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: XeniaFiles-ipa
+          path: ${{ env.EXPORT_PATH }}/*.ipa
+          retention-days: 14
+
+      - name: Upload to App Store Connect / TestFlight
+        if: ${{ github.event.inputs.skip_upload != 'true' }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          IPA_PATH=$(find "${{ env.EXPORT_PATH }}" -maxdepth 1 -type f -name "*.ipa" | head -n1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No .ipa found in ${{ env.EXPORT_PATH }}" >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/private_keys"
+          cp "$ASC_KEY_PATH" "$HOME/private_keys/"
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Clean up temporary keychain and API key
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -f "$ASC_KEY_PATH" || true
