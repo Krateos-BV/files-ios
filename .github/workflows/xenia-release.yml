@@ -212,7 +212,7 @@ jobs:
           install_profile "Xenia Files BackgroundUploadExtension App Store" "$APPLE_PROFILE_FILES_BACKGROUNDUPLOAD"
           install_profile "Xenia Files File Provider Extension App Store" "$APPLE_PROFILE_FILES_FILEPROVIDER"
           install_profile "Xenia Files File Provider Extension UI App Store" "$APPLE_PROFILE_FILES_FILEPROVIDERUI"
-          install_profile "Xenia Files Notification Service Extension App Store" "$APPLE_PROFILE_FILES_NOTIFICATIONSERVICE"
+          install_profile "Xenia Files Notification Service Extension App Sto" "$APPLE_PROFILE_FILES_NOTIFICATIONSERVICE"
           install_profile "Xenia Files Share App Store" "$APPLE_PROFILE_FILES_SHARE"
           install_profile "Xenia Files Widget App Store" "$APPLE_PROFILE_FILES_WIDGET"
           install_profile "Xenia Files WidgetDashboardIntentHandler App Store" "$APPLE_PROFILE_FILES_WIDGETDASHBOARD"
@@ -249,7 +249,7 @@ jobs:
               <key>eu.xeniacloud.files.File-Provider-Extension-UI</key>
               <string>Xenia Files File Provider Extension UI App Store</string>
               <key>eu.xeniacloud.files.Notification-Service-Extension</key>
-              <string>Xenia Files Notification Service Extension App Store</string>
+              <string>Xenia Files Notification Service Extension App Sto</string>
               <key>eu.xeniacloud.files.Share</key>
               <string>Xenia Files Share App Store</string>
               <key>eu.xeniacloud.files.Widget</key>
