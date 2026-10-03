@@ -78,8 +78,8 @@ final class NCBrandOptions: @unchecked Sendable {
     var folderDefaultAutoUpload: String = "Photos"
 
     // Capabilities Group
-    var capabilitiesGroup: String = "group.it.twsweb.Crypto-Cloud"
-    var capabilitiesGroupApps: String = "group.com.nextcloud.apps"
+    var capabilitiesGroup: String = "group.eu.xeniacloud.files"
+    var capabilitiesGroupApps: String = "group.eu.xeniacloud.apps"
 
     // BRAND ONLY
     var use_AppConfig: Bool = false                                                         // Don't touch me !!

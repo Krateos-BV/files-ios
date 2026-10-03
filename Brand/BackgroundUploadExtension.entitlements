@@ -8,7 +8,7 @@
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)it.twsweb.Crypto-Cloud</string>
+		<string>$(AppIdentifierPrefix)eu.xeniacloud.files</string>
 	</array>
 </dict>
 </plist>
