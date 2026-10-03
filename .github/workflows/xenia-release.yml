@@ -90,7 +90,7 @@ jobs:
       # the mock in a real App Store upload would ship a non-functional
       # Crashlytics integration.
       - name: Download GoogleService-Info.plist (mock -- see comment above)
-        run: wget "https://raw.githubusercontent.com/firebase/quickstart-ios/master/mock-GoogleService-Info.plist" -O GoogleService-Info.plist
+        run: wget "https://raw.githubusercontent.com/firebase/quickstart-ios/62156c8f986a7747309a67efc10c7578b17266ed/mock-GoogleService-Info.plist" -O GoogleService-Info.plist
 
       - name: Setup Xcode ${{ env.XCODE_VERSION }}
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
@@ -115,6 +115,13 @@ jobs:
 
           echo "$APPLE_DIST_CERT_P12" | base64 --decode > "$CERT_PATH"
 
+          # This runner is self-hosted and PERSISTENT -- it's also the Mac
+          # Vasilis uses interactively. `security list-keychain -s` sets
+          # the user-domain search list for real, not just for this job, so
+          # the original list is saved here and restored in the final
+          # cleanup step rather than just deleted-and-forgotten.
+          security list-keychains -d user | sed -E 's/^[[:space:]]*"(.*)"$/\1/' > "$RUNNER_TEMP/original-keychain-list.txt"
+
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -131,6 +138,7 @@ jobs:
           # different "Apple Distribution: Krateos B.V." certificate) from
           # past activity. Appending this temp keychain to that existing
           # list made identity resolution non-deterministic across targets.
+          # The original list is restored in cleanup, below.
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
@@ -329,3 +337,14 @@ jobs:
         run: |
           security delete-keychain "$KEYCHAIN_PATH" || true
           rm -f "$ASC_KEY_PATH" || true
+
+          # Restore this Mac's own keychain search list -- the Archive step
+          # replaced it with just the (now-deleted) temp keychain. Without
+          # this, the runner's interactive login session would be left
+          # unable to find its own login keychain.
+          ORIGINAL_LIST="$RUNNER_TEMP/original-keychain-list.txt"
+          if [ -f "$ORIGINAL_LIST" ]; then
+            while IFS= read -r kc; do
+              [ -n "$kc" ] && [ -f "$kc" ] && printf '%s\0' "$kc"
+            done < "$ORIGINAL_LIST" | xargs -0 security list-keychain -d user -s || true
+          fi
