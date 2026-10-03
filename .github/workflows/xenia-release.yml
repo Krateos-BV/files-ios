@@ -81,6 +81,17 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      # GoogleService-Info.plist is gitignored (real Firebase API keys) and
+      # has no CI substitute yet -- xcode.yml/additional-targets.yml use
+      # Google's public mock file as a build-input placeholder, same as
+      # here. XNT-241: before a REAL (non skip_upload) release ships, this
+      # needs either a real Xenia Files Firebase project + config pulled
+      # from Infisical, or Crashlytics disabled for Release builds -- using
+      # the mock in a real App Store upload would ship a non-functional
+      # Crashlytics integration.
+      - name: Download GoogleService-Info.plist (mock -- see comment above)
+        run: wget "https://raw.githubusercontent.com/firebase/quickstart-ios/master/mock-GoogleService-Info.plist" -O GoogleService-Info.plist
+
       - name: Setup Xcode ${{ env.XCODE_VERSION }}
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
