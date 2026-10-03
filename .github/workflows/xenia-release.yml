@@ -4,13 +4,26 @@
 # XeniaCloud release pipeline — XNT-241.
 #
 # Builds a signed archive, exports an .ipa, and uploads it to App Store
-# Connect / TestFlight. Mirrors talk-ios's xenia-release.yml (XNT-213),
-# which is the first proven-working pattern in this estate: automatic
-# signing via the ASC API key for Archive, then a manually-created App
-# Store distribution profile per target installed and referenced
-# explicitly for Export (Cloud Managed Signing cannot create a genuine
-# "iOS App Store" profile via API key alone -- only a Development-type
-# one, confirmed the hard way on talk-ios).
+# Connect / TestFlight.
+#
+# Unlike talk-ios/notes-ios, this repo's release runner (xcode-27) is a
+# self-hosted, PERSISTENT machine, not a fresh GitHub-hosted VM per run.
+# Automatic signing (Cloud Managed Signing via the ASC API key, the pattern
+# talk-ios's Archive step uses) ties a Development certificate to the
+# *machine identity*, not just the account -- the first successful
+# automatic-signing attempt on this runner permanently registered a
+# Development cert for this machine with Apple, and because the temp
+# keychain that held its private key is deleted at the end of every job,
+# every later run finds Apple refusing to reissue one without a manual
+# revoke. talk-ios/notes-ios never hit this because every hosted-runner job
+# is a brand-new VM Apple has no history for.
+#
+# Fix: skip Cloud Managed Signing for Archive entirely. CODE_SIGN_STYLE is
+# Manual project-wide (see project.pbxproj) with CODE_SIGN_IDENTITY="Apple
+# Distribution" and a per-target PROVISIONING_PROFILE_SPECIFIER pointing at
+# the same manually-created App Store distribution profiles Export already
+# uses below. No Development certificate, and no per-machine Apple state,
+# is ever involved.
 #
 # Unlike talk-ios, this project has no CocoaPods (Swift Package Manager
 # only, resolved via Nextcloud.xcodeproj/project.xcworkspace), and existing
@@ -19,12 +32,8 @@
 # for every workflow in this repo.
 #
 # Secrets: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8,
-# APPLE_DIST_CERT_P12, APPLE_DIST_CERT_PASSWORD are already org-level
-# secrets scoped to this repo (shared with talk-ios/notes-ios/files-ios).
-# APPLE_PROFILE_FILES and the 8 per-extension profile secrets do NOT exist
-# yet at the time this workflow was written -- see XNT-241 for exactly
-# what's needed from Vasilis before this can go past the profile-install
-# step.
+# APPLE_DIST_CERT_P12, APPLE_DIST_CERT_PASSWORD, APPLE_PROFILE_FILES and the
+# 8 per-extension profile secrets are all present as of 2026-10-02.
 
 name: Xenia Release (signed archive + TestFlight upload)
 
@@ -106,7 +115,12 @@ jobs:
             -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
-          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          # Exclusive, not additive: this runner's persistent login keychain
+          # already holds other codesigning identities (including a second,
+          # different "Apple Distribution: Krateos B.V." certificate) from
+          # past activity. Appending this temp keychain to that existing
+          # list made identity resolution non-deterministic across targets.
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           rm -f "$CERT_PATH"
@@ -126,37 +140,10 @@ jobs:
           chmod 600 "$KEY_PATH"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
-      - name: Archive (signed, automatic signing via ASC API key)
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -o pipefail && \
-          xcodebuild archive \
-            -project "${{ env.PROJECT }}" \
-            -scheme "${{ env.SCHEME }}" \
-            -archivePath "${{ env.ARCHIVE_PATH }}" \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath 'DerivedData' \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
-            | xcbeautify --quieter
-
-      # --- Manually-created App Store distribution profiles (XNT-241).
-      #
-      # Only the main app's profile ("Xenia Files App Store") is known to
-      # have been created in the portal as of this writing; none of the 8
-      # extension profiles exist yet, and NO profile secret at all has been
-      # added to this repo yet (confirmed: `gh api
-      # repos/Krateos-BV/files-ios/actions/secrets` returns an empty list).
-      # This step will fail at "Required profile secrets are present" until
-      # that's done -- see XNT-241 for the exact list of what's needed.
+      # --- Manually-created App Store distribution profiles (XNT-241),
+      # installed BEFORE Archive, not just before Export: Archive signs
+      # manually too (see the top-of-file comment), so it needs these
+      # profiles present just as much as Export does.
       - name: Required profile secrets are present
         env:
           APPLE_PROFILE_FILES: ${{ secrets.APPLE_PROFILE_FILES }}
@@ -216,6 +203,23 @@ jobs:
           install_profile "Xenia Files Share App Store" "$APPLE_PROFILE_FILES_SHARE"
           install_profile "Xenia Files Widget App Store" "$APPLE_PROFILE_FILES_WIDGET"
           install_profile "Xenia Files WidgetDashboardIntentHandler App Store" "$APPLE_PROFILE_FILES_WIDGETDASHBOARD"
+
+      - name: Archive (signed, manual signing with Distribution cert + App Store profiles)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail && \
+          xcodebuild archive \
+            -project "${{ env.PROJECT }}" \
+            -scheme "${{ env.SCHEME }}" \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath 'DerivedData' \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            | xcbeautify --quieter
 
       - name: Write ExportOptions.plist
         env:
