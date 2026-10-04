@@ -3,43 +3,103 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import Photos
 import NextcloudKit
 
-// XNT-229: The PhotosKit `PHBackgroundResourceUploadJobExtension` APIs this manager originally
-// wrapped (PHAssetResourceUploadJobOptions, PHPhotoLibrary.enableUploadJobExtension, etc.) only
-// exist in the Xcode 27 SDK, which no hosted GitHub Actions runner image carries. The
-// BackgroundUploadExtension target and its scheme/build-phase embedding have been disabled so the
-// main app can build on hosted runners again (see Jira XNT-229). This class previously lived
-// behind `NCBrandOptions.shared.enable_background_upload_extension`, which already defaults to
-// `false` for this brand (Brand/NCBrand.swift), so this stub is behavior-preserving for the
-// current shipped configuration: callers already treated a `false`/no-op result as "feature
-// unavailable, fall back to the existing BGTaskScheduler-based auto-upload path"
-// (see iOSClient/Refresh/AppDelegate+AppRefresh.swift, iOSClient/Processor/AppDelegate+AppProcessing.swift,
-// and NCAutoUpload.autoUploadBackgroundSync()).
-//
-// Capability lost while this stub is in place: true continuation of photo/file auto-upload after
-// the app has been force-quit or fully suspended by iOS, and upload progress that is OS-managed
-// by PhotosKit rather than opportunistically scheduled. The BGAppRefreshTask/BGProcessingTask path
-// still provides best-effort background auto-upload while the app is merely backgrounded (not
-// force-quit), but is throttled by the system and is not guaranteed to run on any fixed schedule.
-//
-// To restore the original behavior, revert this file and re-enable the BackgroundUploadExtension
-// target's CopyFiles embedding in Nextcloud.xcodeproj/project.pbxproj on Xcode-27-only
-// infrastructure.
+@available(iOS 27, *)
 final class NCBackgroundUploadExtensionManager {
     static let shared = NCBackgroundUploadExtensionManager()
+
+    private let database = NCManageDatabase.shared
+    private let global = NCGlobal.shared
 
     private init() {}
 
     func shouldUseExtension() async -> Bool {
-        false
+        guard PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized else {
+            return false
+        }
+
+        guard !NCPreferences().formatCompatibility else {
+            return false
+        }
+
+        guard NCBrandOptions.shared.enable_background_upload_extension else {
+            return false
+        }
+
+        guard let account = await database.getTableAccountAsync(predicate: NSPredicate(format: "autoUploadStart == true")) else {
+            return false
+        }
+
+        let capabilities = await NKCapabilities.shared.getCapabilities(for: account.account)
+
+        guard NCBrandOptions.shared.isServerVersion(capabilities, greaterOrEqualTo: .v33) else {
+            nkLog(tag: global.logTagBackgroundUpload, message: "Background upload extension unavailable for account \(account.account): server version is lower than 33")
+            return false
+        }
+
+        return true
     }
 
     func ensureEnabled() async -> Bool {
-        false
+        guard NCBrandOptions.shared.enable_background_upload_extension else {
+            _ = await disableIfIdle()
+            return false
+        }
+
+        guard await shouldUseExtension() else {
+            return false
+        }
+
+        let library = PHPhotoLibrary.shared()
+        let options = PHAssetResourceUploadJobOptions()
+        options.preventsExpensiveNetworkAccess = false
+
+        do {
+            if library.uploadJobExtensionEnabled {
+                try library.setUploadJobExtensionOptions(options)
+            } else {
+                try library.enableUploadJobExtension(with: options)
+            }
+
+            nkLog(tag: global.logTagBackgroundUpload, message: "Background upload extension enabled: \(library.uploadJobExtensionEnabled)")
+            return library.uploadJobExtensionEnabled
+        } catch {
+            nkLog(tag: global.logTagBackgroundUpload, message: "Background upload extension enable failed: \(error)")
+            return false
+        }
     }
 
     func disableIfIdle() async -> Bool {
-        true
+        let featureEnabled = NCBrandOptions.shared.enable_background_upload_extension
+        let account = await database.getTableAccountAsync(predicate: NSPredicate(format: "autoUploadStart == true"))
+
+        guard !featureEnabled || account == nil else {
+            return false
+        }
+
+        let predicate = NSPredicate(format: "sessionSelector == %@ AND backgroundUploadJobIdentifier != ''", global.selectorUploadAutoUpload)
+        let metadatas: [tableMetadata] = await database.getMetadatasAsync(predicate: predicate)
+
+        guard metadatas.isEmpty else {
+            nkLog(tag: global.logTagBackgroundUpload, message: "Background upload extension disable deferred: \(metadatas.count) jobs still active")
+            return false
+        }
+
+        let library = PHPhotoLibrary.shared()
+
+        guard library.uploadJobExtensionEnabled else {
+            return true
+        }
+
+        do {
+            try library.disableUploadJobExtension()
+            nkLog(tag: global.logTagBackgroundUpload, message: "Background upload extension disabled")
+            return !library.uploadJobExtensionEnabled
+        } catch {
+            nkLog(tag: global.logTagBackgroundUpload, message: "Background upload extension disable failed: \(error)")
+            return false
+        }
     }
 }
