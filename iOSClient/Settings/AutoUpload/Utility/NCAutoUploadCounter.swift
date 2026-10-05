@@ -4,12 +4,16 @@
 
 import Foundation
 import Observation
+import Photos
 
 @MainActor
 @Observable
 final class NCAutoUploadCounter {
+    private(set) var sinceDate: Date?
     private(set) var count = 0
     private(set) var failedCount = 0
+    private(set) var isSuspended = false
+    private(set) var suspensionError: String?
     private(set) var isLoaded = false
 
     init() {}
@@ -27,10 +31,20 @@ final class NCAutoUploadCounter {
 
     private var itemsLeftMessage: String {
         if count == 0 {
-            return NSLocalizedString("_auto_upload_no_new_items_to_upload_", comment: "")
+            let key = usesPhotoKitAutoUpload ? "_auto_upload_active_" : "_auto_upload_no_new_items_to_upload_"
+            return NSLocalizedString(key, comment: "")
         }
 
-        return String.localizedStringWithFormat(NSLocalizedString("_focused_auto_upload_items_left_", comment: ""), count)
+        return String.localizedStringWithFormat(NSLocalizedString("_auto_upload_files_in_queue_", comment: ""), count)
+    }
+
+    private var usesPhotoKitAutoUpload: Bool {
+        guard #available(iOS 27, *),
+              NCPreferences().shouldUseBackgroundUploadExtension,
+              PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized,
+              let account,
+              let capabilities = NCNetworking.shared.capabilities[account] else { return false }
+        return NCBrandOptions.shared.isServerVersion(capabilities, greaterOrEqualTo: .v35)
     }
 
     var photosToBackUpMessage: String {
@@ -42,6 +56,18 @@ final class NCAutoUploadCounter {
     }
 
     var itemsLeftSummary: String {
+        // A suspended queue cannot make progress, so its blocking error is more useful than counters.
+        if isSuspended {
+            if let suspensionError {
+                return String.localizedStringWithFormat(
+                    NSLocalizedString("_auto_upload_suspended_error_", comment: ""),
+                    suspensionError
+                )
+            }
+
+            return NSLocalizedString("_auto_upload_suspended_", comment: "")
+        }
+
         if failedCount == 0 {
             return itemsLeftMessage
         }
@@ -89,7 +115,12 @@ final class NCAutoUploadCounter {
             self.account = account
             self.autoUploadServerUrlBase = base
 
-            await refresh()
+            // PhotoKit can replace completed jobs without changing the queue count.
+            // Refresh while the view is subscribed so the incremental date stays current too.
+            while !Task.isCancelled {
+                await refresh()
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            }
         }
     }
 
@@ -108,8 +139,11 @@ final class NCAutoUploadCounter {
 
         account = nil
         autoUploadServerUrlBase = nil
+        sinceDate = nil
         count = 0
         failedCount = 0
+        isSuspended = false
+        suspensionError = nil
         isLoaded = false
     }
 
@@ -121,8 +155,37 @@ final class NCAutoUploadCounter {
         let counts = await NCManageDatabase.shared.countAutoUploadMetadatasAsync(account: account,
                                                                                  autoUploadServerUrlBase: autoUploadServerUrlBase)
 
+        let currentSinceDate = await NCManageDatabase.shared.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", account))?.autoUploadSinceDate
+        guard self.account == account, self.autoUploadServerUrlBase == autoUploadServerUrlBase else { return }
+        sinceDate = currentSinceDate
         count = counts.pending
         failedCount = counts.failed
+
+        isSuspended = NCPreferences().isBackgroundUploadSuspended(account: account)
+        suspensionError = nil
+
+        if isSuspended {
+            // The newest stopped transfer contains the server error that opened the circuit breaker.
+            let predicate = NSPredicate(
+                format: "account == %@ AND autoUploadServerUrlBase == %@ AND directory == false AND status == %d AND backgroundUploadJobIdentifier == %@",
+                account,
+                autoUploadServerUrlBase,
+                NCGlobal.shared.metadataStatusUploadError,
+                "pending"
+            )
+            let metadata = await NCManageDatabase.shared.getMetadatasAsync(
+                predicate: predicate,
+                sortedByKeyPath: "sessionDate",
+                ascending: false,
+                limit: 1
+            )?.first
+            let error = metadata?.sessionError.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let error, !error.isEmpty {
+                suspensionError = error
+            }
+        }
+
         isLoaded = true
     }
 }

@@ -20,22 +20,22 @@
 			<string>%d downloads restantes permitidos</string>
 		</dict>
 	</dict>
-	<key>_focused_auto_upload_items_left_</key>
+	<key>_auto_upload_files_in_queue_</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%#@items@</string>
-		<key>items</key>
+		<string>%#@files@</string>
+		<key>files</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
 			<string>NSStringPluralRuleType</string>
 			<key>NSStringFormatValueTypeKey</key>
 			<string>d</string>
 			<key>one</key>
-			<string>Resta %d item</string>
+			<string>%d arquivo na fila</string>
 			<key>many</key>
-			<string>Restam %d de itens</string>
+			<string>%d de arquivos na fila</string>
 			<key>other</key>
-			<string>Restam %d itens</string>
+			<string>%d arquivos na fila</string>
 		</dict>
 	</dict>
 	<key>_focused_auto_upload_photos_to_back_up_</key>
