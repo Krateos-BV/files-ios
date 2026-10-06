@@ -72,7 +72,7 @@ final class NCBrandOptions: @unchecked Sendable {
     var privacy: String = "https://xeniacloud.eu/privacy-policy/"
     var sourceCode: String = "https://github.com/Krateos-BV/files-ios"
     var mobileconfig: String = "/remote.php/dav/provisioning/apple-provisioning.mobileconfig"
-    var appStoreUrl: String = "https://apps.apple.com/in/app/nextcloud/id1125420102"
+    var appStoreUrl: String = "" // TODO: set to the Xenia Files App Store URL once the app id exists
 
     // Auto Upload default folder
     var folderDefaultAutoUpload: String = "Photos"
@@ -105,7 +105,7 @@ final class NCBrandOptions: @unchecked Sendable {
     var disable_crash_service: Bool = true
     var disable_log: Bool = false
     var disable_mobileconfig: Bool = false  
-    var disable_show_more_nextcloud_apps_in_settings: Bool = false
+    var disable_show_more_nextcloud_apps_in_settings: Bool = true
     var doNotAskPasscodeAtStartup: Bool = false
     var disable_source_code_in_settings: Bool = false
     var enforce_passcode_lock = false
