@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>BackgroundUploadURLBase</key>
-	<string>https://cloud.nextcloud.com</string>
+	<string>https://portal.xeniacloud.eu</string>
 	<key>EXAppExtensionAttributes</key>
 	<dict>
 		<key>EXExtensionPointIdentifier</key>
