@@ -37,8 +37,6 @@ class NCAutoUploadModel: ObservableObject, ViewOnAppearHandling {
     @Published var showUploadAllPhotosWarning = false
     /// Whether Photos permissions have been granted or not.
     @Published var photosPermissionsGranted = true
-    /// Whether `Always` location authorization has been granted, enabling background location-based auto upload.
-    @Published var locationAutoUploadPermissionGranted: Bool = false
 
     /// Whether the error alert should be shown in the view.
     @Published var showErrorAlert: Bool = false
@@ -72,7 +70,6 @@ class NCAutoUploadModel: ObservableObject, ViewOnAppearHandling {
 
     /// Triggered when the view appears.
     func onViewAppear() {
-        self.checkPermission()
         if let tableAccount = self.database.getTableAccount(predicate: NSPredicate(format: "account == %@", session.account)) {
             autoUploadImage = tableAccount.autoUploadImage
             autoUploadWWAnPhoto = tableAccount.autoUploadWWAnPhoto
@@ -292,28 +289,6 @@ class NCAutoUploadModel: ObservableObject, ViewOnAppearHandling {
             let autoUploadServerUrlBase = await NCManageDatabase.shared.getAccountAutoUploadServerUrlBaseAsync(session: session)
             await NCManageDatabase.shared.deleteAutoUploadTransferAsync(account: session.account, autoUploadServerUrlBase: autoUploadServerUrlBase)
         }
-    }
-
-    /// Requests or revokes `Always` location authorization for background location-based auto upload.
-    func handleLocationChange(newValue: Bool) {
-        if let controller = self.controller {
-            if newValue {
-                Task { @MainActor in
-                    let result = await NCBackgroundLocationUploadManager.shared.requestAuthorizationAlwaysAsync(from: controller)
-                    self.locationAutoUploadPermissionGranted = result
-                    NCPreferences().location = result
-                }
-            } else {
-                self.locationAutoUploadPermissionGranted = false
-                NCPreferences().location = false
-            }
-        }
-    }
-
-    /// Refreshes `locationAutoUploadPermissionGranted` from the current location authorization status and stored preference.
-    func checkPermission() {
-        let status = CLLocationManager().authorizationStatus
-        locationAutoUploadPermissionGranted = (status == .authorizedAlways && NCPreferences().location)
     }
 }
 
