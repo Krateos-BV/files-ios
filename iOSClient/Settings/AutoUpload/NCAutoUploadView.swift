@@ -60,7 +60,6 @@ struct NCAutoUploadView: View {
             stopAutoUploadCounterSubscription()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            model.checkPermission()
             refreshOtherAutoUploadAccount()
         }
         .alert(model.error, isPresented: $model.showErrorAlert) {
@@ -414,38 +413,6 @@ struct NCAutoUploadView: View {
                     Text(
                         NSLocalizedString(
                             "_autoupload_create_subfolder_footer_",
-                            comment: ""
-                        )
-                    )
-                    .font(.footnote)
-                })
-
-                Section(content: {
-                    Toggle(
-                        NSLocalizedString(
-                            "_enable_background_location_title_",
-                            comment: ""
-                        ),
-                        isOn: $model.locationAutoUploadPermissionGranted
-                    )
-                    .font(.body)
-                    .tint(
-                        Color(
-                            NCBrandColor.shared.getElement(
-                                account: model.session.account
-                            )
-                        )
-                    )
-                    .opacity(model.autoUploadStart ? 0.15 : 1)
-                    .onChange(
-                        of: model.locationAutoUploadPermissionGranted
-                    ) { _, newValue in
-                        model.handleLocationChange(newValue: newValue)
-                    }
-                }, footer: {
-                    Text(
-                        NSLocalizedString(
-                            "_enable_background_location_footer_",
                             comment: ""
                         )
                     )
