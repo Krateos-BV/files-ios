@@ -4181,8 +4181,8 @@
 				F77B0F981D118A16002130FE /* Embed Foundation Extensions */,
 				AFBFD01327551A54002244BC /* ShellScript */,
 				F76DA934277B75710082465B /* Embed Frameworks */,
-				F76995F02F99EF6C00291FA7 /* Crashlytics dSYM Upload */,
 				F721C7FE3040345700DD9D36 /* CopyFiles */,
+				F76995F02F99EF6C00291FA7 /* Crashlytics dSYM Upload */,
 			);
 			buildRules = (
 			);
