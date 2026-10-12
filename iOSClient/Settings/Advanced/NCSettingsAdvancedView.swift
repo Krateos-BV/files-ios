@@ -123,10 +123,10 @@ struct NCSettingsAdvancedView: View {
             // Section: Diagnostic
             if !NCBrandOptions.shared.disable_log {
                 Section(content: {
-                    /// View Log File
-                    Button(action: {
-                        model.viewLogFile()
-                    }, label: {
+                    /// View active and rotated log files.
+                    NavigationLink(destination: LazyView {
+                        NCLogFilesView(model: model)
+                    }) {
                         HStack {
                             Image(systemName: "doc.badge.gearshape")
                                 .font(.icon())
@@ -135,7 +135,7 @@ struct NCSettingsAdvancedView: View {
                             Text(NSLocalizedString("_view_log_", comment: ""))
                                 .font(.body)
                         }
-                    })
+                    }
                     .tint(Color(UIColor.label))
                     // Set Log Level()
                     Picker(NSLocalizedString("_set_log_level_", comment: ""), selection: $model.selectedLogLevel) {
@@ -148,20 +148,6 @@ struct NCSettingsAdvancedView: View {
                     .onChange(of: model.selectedLogLevel) {
                         model.updateSelectedLogLevel()
                     }
-                    // Clear Log File
-                    Button(action: {
-                        model.clearLogFile()
-                    }, label: {
-                        HStack {
-                            Image(systemName: "xmark")
-                                .font(.icon())
-                                .frame(width: 26)
-                                .foregroundColor(Color(NCBrandColor.shared.iconImageColor))
-                            Text(NSLocalizedString("_clear_log_", comment: ""))
-                                .font(.body)
-                        }
-                    })
-                    .tint(Color(UIColor.label))
                 }, header: {
                     Text(NSLocalizedString("_diagnostics_", comment: ""))
                         .font(.headline)

@@ -46,12 +46,6 @@ extension NCNetworking {
                                                             options: options) { request in
             requestHandler(request)
         } taskHandler: { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                            path: serverUrlFileName,
-                                                                                            name: "upload")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
             taskHandler(task)
         } progressHandler: { progress in
             progressHandler(progress.completedUnitCount, progress.totalUnitCount, progress.fractionCompleted)
@@ -133,11 +127,6 @@ extension NCNetworking {
                     uploadStart(filesChunk)
                 } uploadTaskHandler: { task in
                     Task {
-                        let url = task.originalRequest?.url?.absoluteString ?? ""
-                        let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: metadata.account,
-                                                                                                    path: url,
-                                                                                                    name: "upload")
-                        await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
                         await NCManageDatabase.shared.setMetadataSessionAsync(ocId: metadata.ocId,
                                                                               sessionTaskIdentifier: task.taskIdentifier,
                                                                               status: self.global.metadataStatusUploading)
@@ -509,13 +498,7 @@ extension NCNetworking {
     @MainActor
     func termsOfService(metadata: tableMetadata) async {
         let options = NKRequestOptions(checkInterceptor: false, queue: .main)
-        let results = await NextcloudKit.shared.getTermsOfServiceAsync(account: metadata.account, options: options, taskHandler: { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: metadata.account,
-                                                                                            name: "getTermsOfService")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
-        })
+        let results = await NextcloudKit.shared.getTermsOfServiceAsync(account: metadata.account, options: options)
 
         if results.error == .success, let tos = results.tos, !tos.hasUserSigned() {
             await self.uploadCancelFile(metadata: metadata)
@@ -583,6 +566,23 @@ extension NCNetworking {
                                                                              userId: metadata.userId,
                                                                              urlBase: metadata.urlBase)
         utilityFileSystem.removeFile(atPath: fileNamePath)
+
+#if !EXTENSION
+        if metadata.sessionSelector == global.selectorUploadAutoUpload {
+            do {
+                try await NCLocalDatabase.shared.recordPhotoLibraryAssetUpload(
+                    account: metadata.account,
+                    assetLocalIdentifier: metadata.assetLocalIdentifier,
+                    classFile: metadata.classFile,
+                    isLivePhoto: metadata.isLivePhoto,
+                    creationDate: metadata.creationDate as Date
+                )
+            } catch {
+                // The server upload remains successful even if its local PhotoKit state cannot be recorded.
+                nkLog(error: "Unable to record uploaded photo library asset \(metadata.assetLocalIdentifier): \(error)")
+            }
+        }
+#endif
 
         // Live Photo
         let capabilities = await NKCapabilities.shared.getCapabilities(for: metadata.account)

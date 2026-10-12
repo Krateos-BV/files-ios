@@ -51,6 +51,7 @@ struct NextcloudVersion: Comparable {
     static let v32_0_2 = NextcloudVersion(32, 0, 2)
     static let v33 = NextcloudVersion(33)
     static let v34 = NextcloudVersion(34)
+    static let v35 = NextcloudVersion(35)
 
     static func < (lhs: NextcloudVersion, rhs: NextcloudVersion) -> Bool {
         (lhs.major, lhs.minor, lhs.micro) < (rhs.major, rhs.minor, rhs.micro)
@@ -64,7 +65,11 @@ final class NCBrandOptions: @unchecked Sendable {
     var brandUserAgent: String = "Xenia"
     var textCopyrightNextcloudiOS: String = "Xenia Files for iOS %@ © 2026"
     var textCopyrightNextcloudServer: String = "Nextcloud Server %@"
+<<<<<<< HEAD
     var loginBaseUrl: String = "https://portal.xeniacloud.eu"
+=======
+    var loginBaseUrl: String = ""
+>>>>>>> upstream/master
     var pushNotificationServerProxy: String = ""
     var linkLoginHost: String = "https://xeniacloud.eu"
     var linkloginPreferredProviders: String = "https://xeniacloud.eu"
@@ -74,6 +79,8 @@ final class NCBrandOptions: @unchecked Sendable {
     var mobileconfig: String = "/remote.php/dav/provisioning/apple-provisioning.mobileconfig"
     var appStoreUrl: String = "" // TODO: set to the Xenia Files App Store URL once the app id exists
 
+    var doNotAskPasscodeAtStartup: Bool = false
+
     // Auto Upload default folder
     var folderDefaultAutoUpload: String = "Photos"
 
@@ -82,11 +89,12 @@ final class NCBrandOptions: @unchecked Sendable {
     var capabilitiesGroupApps: String = "group.eu.xeniacloud.apps"
 
     // BRAND ONLY
-    var use_AppConfig: Bool = false                                                         // Don't touch me !!
+    var use_AppConfig: Bool = false
 
     // Use server theming color
     var use_themingColor: Bool = true
 
+<<<<<<< HEAD
     // XeniaCloud is a single-tenant white-label client (same call as talk-ios's XNT-59):
     // there's only ever one valid server, so the upstream marketing intro (Sign Up /
     // Host your own server, both pointing at nextcloud.com) is skipped and the login
@@ -107,6 +115,18 @@ final class NCBrandOptions: @unchecked Sendable {
     var disable_mobileconfig: Bool = false  
     var disable_show_more_nextcloud_apps_in_settings: Bool = true
     var doNotAskPasscodeAtStartup: Bool = false
+=======
+    // MDM settings
+    var disable_intro: Bool = false
+    var disable_request_login_url: Bool = false
+    var disable_multiaccount: Bool = false
+    var disable_more_external_site: Bool = false
+    var disable_openin_file: Bool = false
+    var disable_crash_service: Bool = false
+    var disable_log: Bool = false
+    var disable_mobileconfig: Bool = false  
+    var disable_show_more_nextcloud_apps_in_settings: Bool = false
+>>>>>>> upstream/master
     var disable_source_code_in_settings: Bool = false
     var enforce_passcode_lock = false
     var enforce_privacyScreenEnabled = false
@@ -128,9 +148,6 @@ final class NCBrandOptions: @unchecked Sendable {
     // Number of failed attempts before resetting the app
     let resetAppPasscodeAttempts: Int = 10
     let passcodeSecondsFail: Int = 60
-
-    // Enables the PhotoKit background resource upload extension on iOS 27 and later.
-    var enable_background_upload_extension: Bool = false
 
     // Info Paging
     enum NCInfoPagingTab: Int, CaseIterable {

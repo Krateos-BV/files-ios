@@ -33,48 +33,11 @@ final class NCMediaViewerHostingController: UIHostingController<NCMediaViewerVie
         return formatter
     }()
 
-    private lazy var moreNavigationItem: UIBarButtonItem = {
-        let item = UIBarButtonItem(
-            image: NCImageCache.shared.getImageButtonMore(),
-            primaryAction: nil,
-            menu: nil
-        )
-
-        item.menu = UIMenu(
-            title: "",
-            children: [
-                UIDeferredMenuElement.uncached { [weak self, weak item] completion in
-                    guard let self,
-                          let metadata = self.model.selectedMetadata else {
-                        completion([])
-                        return
-                    }
-
-                    var menuChildren: [UIMenuElement] = []
-
-                    if let viewerMenu = NCContextMenuViewer(
-                        metadata: metadata,
-                        controller: self.contextMenuController,
-                        viewController: self,
-                        webView: false,
-                        sender: item
-                    ).viewMenu() {
-                        menuChildren.append(contentsOf: viewerMenu.children)
-                    }
-
-                    if let videoPlayerMenu = self.makeVideoPlayerMenu(
-                        metadata: metadata
-                    ) {
-                        menuChildren.append(videoPlayerMenu)
-                    }
-
-                    completion(menuChildren)
-                }
-            ]
-        )
-
-        return item
-    }()
+    private lazy var moreNavigationItem = NCContextMenuViewer.mediaNavigationItem(
+        viewController: self,
+        metadataProvider: { [weak self] in self?.model.selectedMetadata },
+        controllerProvider: { [weak self] in self?.contextMenuController }
+    )
 
     private lazy var mediaDetailNavigationItem = UIBarButtonItem(
         image: NCUtility().loadImage(
@@ -91,78 +54,6 @@ final class NCMediaViewerHostingController: UIHostingController<NCMediaViewerVie
         indicator.color = NCBrandColor.shared.iconImageColor
         return indicator
     }()
-
-    // MARK: - Video Player Menu
-
-    private func makeVideoPlayerMenu(metadata: tableMetadata) -> UIMenu? {
-        guard metadata.classFile == NKTypeClassFile.video.rawValue else {
-            return nil
-        }
-
-        let playback = NCVideoPlaybackController.shared
-
-        guard playback.isCurrentVideo(
-            ocId: metadata.ocId,
-            etag: metadata.etag
-        ) else {
-            return nil
-        }
-
-        let alwaysUseVLC = NCPreferences().alwaysUseVLCForVideo(
-            account: metadata.account,
-            ocId: metadata.ocId
-        )
-
-        let alwaysUseVLCAction: UIAction
-
-        switch playback.engine {
-        case .avFoundation:
-            alwaysUseVLCAction = UIAction(
-                title: NSLocalizedString("_always_play_with_vlc_", comment: ""),
-                image: UIImage(named: "Vlc-Logo")?.withRenderingMode(.alwaysTemplate),
-                state: .off
-            ) { _ in
-                NCPreferences().setAlwaysUseVLCForVideo(
-                    true,
-                    account: metadata.account,
-                    ocId: metadata.ocId
-                )
-
-                NCVideoPlaybackController.shared.switchToVLC()
-            }
-
-        case .vlc:
-            guard alwaysUseVLC else {
-                return nil
-            }
-
-            alwaysUseVLCAction = UIAction(
-                title: NSLocalizedString("_always_play_with_vlc_", comment: ""),
-                image: UIImage(named: "Vlc-Logo")?.withRenderingMode(.alwaysTemplate),
-                state: .on
-            ) { _ in
-                NCPreferences().setAlwaysUseVLCForVideo(
-                    false,
-                    account: metadata.account,
-                    ocId: metadata.ocId
-                )
-
-                NCVideoPlaybackController.shared.retryAVFoundation()
-            }
-
-        case .loading,
-             .failed:
-            return nil
-        }
-
-        return UIMenu(
-            title: "",
-            options: .displayInline,
-            children: [
-                alwaysUseVLCAction
-            ]
-        )
-    }
 
     /// Creates a media viewer hosting controller.
     init(
@@ -349,10 +240,7 @@ final class NCMediaViewerHostingController: UIHostingController<NCMediaViewerVie
     }
 
     /// Updates the floating title using the current media metadata.
-    private func updateTitleLabel(
-        metadata: tableMetadata?,
-        backgroundColor: UIColor
-    ) {
+    private func updateTitleLabel(metadata: tableMetadata?, backgroundColor: UIColor) {
         guard let metadata else {
             floatingTitleView.clear()
             return
@@ -524,12 +412,7 @@ final class NCMediaViewerHostingController: UIHostingController<NCMediaViewerVie
     }
 
     /// Presents the SwiftUI media detail panel.
-    private func presentDetailView(
-        metadata: tableMetadata,
-        index: Int,
-        exif: ExifData,
-        animated: Bool
-    ) {
+    private func presentDetailView(metadata: tableMetadata, index: Int, exif: ExifData, animated: Bool) {
         let detailView = NCMediaViewerDetailView(
             metadata: metadata,
             exif: exif
@@ -600,33 +483,20 @@ final class NCMediaViewerTransferDelegate: NSObject, NCTransferDelegate {
     private let onReloadDataSource: @MainActor () async -> Void
     let sceneIdentifier: String = ""
 
-    init(
-        onDeletedOcId: @escaping @MainActor (_ ocId: String) -> Void,
-        onReloadDataSource: @escaping @MainActor () async -> Void
-    ) {
+    init(onDeletedOcId: @escaping @MainActor (_ ocId: String) -> Void, onReloadDataSource: @escaping @MainActor () async -> Void) {
         self.onDeletedOcId = onDeletedOcId
         self.onReloadDataSource = onReloadDataSource
     }
 
     func transferReloadData(serverUrl: String?) { }
 
-    func transferReloadDataSource(
-        serverUrl: String?,
-        requestData: Bool,
-        status: Int?
-    ) {
+    func transferReloadDataSource(serverUrl: String?, requestData: Bool, status: Int?) {
         Task { @MainActor in
             await onReloadDataSource()
         }
     }
 
-    func transferProgressDidUpdate(
-        progress: Float,
-        totalBytes: Int64,
-        totalBytesExpected: Int64,
-        fileName: String,
-        serverUrl: String
-    ) { }
+    func transferProgressDidUpdate(progress: Float, totalBytes: Int64, totalBytesExpected: Int64, fileName: String, serverUrl: String) { }
 
     func transferChange(
         networkingStatus: String,

@@ -129,7 +129,16 @@ struct NCVideoViewerContentView: View {
 
             scheduleAutoPlayIfNeeded()
         }
-        .onReceive(playback.$engine) { _ in
+        .onReceive(playback.$engine) { engine in
+            switch engine {
+            case .avFoundation:
+                presentedVLCURL = nil
+            case .vlc:
+                presentedAVPlayerURL = nil
+            case .loading, .failed:
+                presentedAVPlayerURL = nil
+                presentedVLCURL = nil
+            }
             scheduleAutoPlayIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .ncMediaViewerStopPlayback)) { _ in
@@ -416,11 +425,7 @@ private extension NCVideoViewerContentView {
         }
     }
 
-    func playbackPresentationPlaceholder(
-        url: URL,
-        onURLChanged: @escaping (_ newURL: URL) -> Void,
-        onSelectionRestored: @escaping () -> Void
-    ) -> some View {
+    func playbackPresentationPlaceholder(url: URL, onURLChanged: @escaping (_ newURL: URL) -> Void, onSelectionRestored: @escaping () -> Void) -> some View {
         videoBackgroundColor
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -487,10 +492,7 @@ private extension NCVideoViewerContentView {
     }
 
     @MainActor
-    func isStableSelection(
-        expectedTaskIdentifier: String,
-        expectedLoadGeneration: UUID
-    ) -> Bool {
+    func isStableSelection(expectedTaskIdentifier: String, expectedLoadGeneration: UUID) -> Bool {
         guard !Task.isCancelled else {
             return false
         }
@@ -511,10 +513,7 @@ private extension NCVideoViewerContentView {
     }
 
     @MainActor
-    func resolveAndLoadVideo(
-        expectedTaskIdentifier: String,
-        expectedLoadGeneration: UUID
-    ) async {
+    func resolveAndLoadVideo(expectedTaskIdentifier: String, expectedLoadGeneration: UUID) async {
         errorMessage = nil
 
         if let localURL {
@@ -560,11 +559,7 @@ private extension NCVideoViewerContentView {
     }
 
     @MainActor
-    func loadResolvedVideo(
-        url: URL,
-        expectedTaskIdentifier: String,
-        expectedLoadGeneration: UUID
-    ) {
+    func loadResolvedVideo(url: URL, expectedTaskIdentifier: String, expectedLoadGeneration: UUID) {
         guard expectedTaskIdentifier == taskIdentifier else {
             return
         }
@@ -821,9 +816,7 @@ extension NCVideoViewerContentView {
 
 private extension NCVideoViewerContentView {
     @MainActor
-    func resolvedVideoURL(
-        taskIdentifier: String
-    ) async -> (url: URL?, autoplay: Bool, error: NKError) {
+    func resolvedVideoURL(taskIdentifier: String) async -> (url: URL?, autoplay: Bool, error: NKError) {
         if let existingTask = Self.resolvingTasks[taskIdentifier] {
             return await existingTask.value
         }

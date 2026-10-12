@@ -117,11 +117,7 @@ final class NCVideoControlsView: UIView {
         state.isPlaying = isPlaying
     }
 
-    func updateProgress(
-        progress: Float,
-        elapsedText: String,
-        remainingText: String
-    ) {
+    func updateProgress(progress: Float, elapsedText: String, remainingText: String) {
         let progress = max(0, min(1, progress))
 
         guard state.progress != progress ||
@@ -143,10 +139,7 @@ final class NCVideoControlsView: UIView {
         state.isSeekingEnabled = isEnabled
     }
 
-    func updatePlaybackOptions(
-        isRepeatEnabled: Bool,
-        isAutoAdvanceEnabled: Bool
-    ) {
+    func updatePlaybackOptions(isRepeatEnabled: Bool, isAutoAdvanceEnabled: Bool) {
         if state.isRepeatEnabled != isRepeatEnabled {
             state.isRepeatEnabled = isRepeatEnabled
         }
@@ -271,7 +264,7 @@ final class NCVideoControlsView: UIView {
                 navigationBar.bounds,
                 to: self
             )
-            topOffset = navigationFrame.maxY
+            topOffset = max(safeAreaInsets.top, navigationFrame.maxY)
         } else {
             topOffset = safeAreaInsets.top
         }
@@ -513,7 +506,7 @@ private struct NCVideoControlsSwiftUIView: View {
         }
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .controlGlassBackground(shape: Capsule())
+        .controlGlassBackground(shape: Capsule(), isInteractive: false)
         .contentShape(Capsule())
     }
 
@@ -521,9 +514,8 @@ private struct NCVideoControlsSwiftUIView: View {
         HStack(spacing: NCVideoControlsView.topActionsSpacing) {
             Button(action: onToggleRepeat) {
                 topActionIcon(
-                    systemName: "repeat.1",
-                    pointSize: 17,
-                    isActive: state.isRepeatEnabled
+                    systemName: state.isRepeatEnabled ? "repeat.1.circle.fill" : "repeat.1",
+                    pointSize: 17
                 )
             }
             .buttonStyle(.plain)
@@ -532,8 +524,7 @@ private struct NCVideoControlsSwiftUIView: View {
             Button(action: onToggleAutoAdvance) {
                 topActionIcon(
                     systemName: state.isAutoAdvanceEnabled ? "forward.end.fill" : "forward.end",
-                    pointSize: 17,
-                    isActive: state.isAutoAdvanceEnabled
+                    pointSize: 17
                 )
             }
             .buttonStyle(.plain)
@@ -557,7 +548,6 @@ private struct NCVideoControlsSwiftUIView: View {
                         width: NCVideoControlsView.topActionsButtonSize,
                         height: NCVideoControlsView.topActionsButtonSize
                     )
-                    .videoControlIconShadow()
                     .controlGlassBackground(shape: Circle())
 
             case .vlcTracks:
@@ -661,15 +651,10 @@ private struct NCVideoControlsSwiftUIView: View {
         .buttonStyle(.plain)
     }
 
-    private func topActionIcon(
-        systemName: String,
-        pointSize: CGFloat,
-        isActive: Bool = false
-    ) -> some View {
+    private func topActionIcon(systemName: String, pointSize: CGFloat) -> some View {
         Image(systemName: systemName)
             .font(.system(size: pointSize, weight: .regular))
-            .foregroundStyle(isActive ? Color.accentColor : .white)
-            .videoControlIconShadow()
+            .foregroundStyle(.primary)
             .frame(
                 width: NCVideoControlsView.topActionsButtonSize,
                 height: NCVideoControlsView.topActionsButtonSize
@@ -677,13 +662,7 @@ private struct NCVideoControlsSwiftUIView: View {
             .controlGlassBackground(shape: Circle())
     }
 
-    private func circleButton(
-        systemName: String,
-        size: CGFloat,
-        pointSize: CGFloat,
-        isEnabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func circleButton(systemName: String, size: CGFloat, pointSize: CGFloat, isEnabled: Bool, action: @escaping () -> Void) -> some View {
         Button {
             guard isEnabled else {
                 return
@@ -693,8 +672,7 @@ private struct NCVideoControlsSwiftUIView: View {
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: pointSize, weight: .regular))
-                .foregroundStyle(.white)
-                .videoControlIconShadow()
+                .foregroundStyle(.primary)
                 .frame(width: size, height: size)
                 .controlGlassBackground(shape: Circle())
         }
@@ -707,8 +685,7 @@ private struct NCVideoControlsSwiftUIView: View {
     private func timeLabel(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 15, weight: .medium, design: .rounded).monospacedDigit())
-            .foregroundStyle(.gray)
-            .videoControlIconShadow()
+            .foregroundStyle(.secondary)
             .lineLimit(1)
             .minimumScaleFactor(0.85)
     }
@@ -720,58 +697,26 @@ private struct NCVideoAirPlayRoutePickerView: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
         let routePickerView = AVRoutePickerView()
         routePickerView.backgroundColor = .clear
-        routePickerView.tintColor = .white
-        routePickerView.activeTintColor = .white
+        routePickerView.tintColor = .label
+        routePickerView.activeTintColor = .label
         routePickerView.prioritizesVideoDevices = true
         return routePickerView
     }
 
-    func updateUIView(
-        _ uiView: AVRoutePickerView,
-        context: Context
-    ) { }
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) { }
 }
 
 private extension View {
     @ViewBuilder
-    func controlGlassBackground<BackgroundShape: Shape>(
-        shape: BackgroundShape
-    ) -> some View {
+    func controlGlassBackground<BackgroundShape: Shape>(shape: BackgroundShape, isInteractive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
             self
-                .glassEffect(.regular, in: shape)
-                .overlay {
-                    shape
-                        .stroke(.white.opacity(0.58), lineWidth: 1.2)
-                }
-                .overlay {
-                    shape
-                        .stroke(.white.opacity(0.20), lineWidth: 4)
-                        .blur(radius: 2)
-                        .mask(shape)
-                }
-                .shadow(
-                    color: .black.opacity(0.18),
-                    radius: 14,
-                    x: 0,
-                    y: 4
-                )
+                .glassEffect(.regular.interactive(isInteractive), in: shape)
         } else {
             self
-                .background(.white.opacity(0.92))
+                .background(.regularMaterial)
                 .clipShape(shape)
         }
-    }
-}
-
-private extension View {
-    func videoControlIconShadow() -> some View {
-        shadow(
-            color: .black.opacity(0.5),
-            radius: 2.5,
-            x: 0,
-            y: 1
-        )
     }
 }
 
@@ -831,8 +776,5 @@ private struct NCVideoControlsPreviewView: UIViewRepresentable {
         return containerView
     }
 
-    func updateUIView(
-        _ uiView: UIView,
-        context: Context
-    ) { }
+    func updateUIView(_ uiView: UIView, context: Context) { }
 }

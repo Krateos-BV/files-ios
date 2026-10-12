@@ -7,11 +7,13 @@ import Photos
 import NextcloudKit
 
 extension BackgroundUploadExtension {
+    /// Converts pending metadata records into PhotoKit upload jobs until the job limit is reached.
+    /// Persists each PhotoKit identifier so later invocations can reconcile the job with Realm state.
     func createUploadJobs(account: tableAccount) async throws -> Bool {
         let availableJobs = availableUploadJobSlots()
 
         guard availableJobs > 0 else {
-            logDebug("No available background upload job slots")
+            logInfo("No available background upload job slots")
             return false
         }
 
@@ -40,15 +42,34 @@ extension BackgroundUploadExtension {
         var madeProgress = false
 
         for metadata in metadatas {
+            guard let currentAccount = await database.getTableAccountAsync(
+                predicate: NSPredicate(format: "account == %@", account.account)
+            ), currentAccount.autoUploadStart,
+               currentAccount.autoUploadSessionIdentifier == account.autoUploadSessionIdentifier else {
+                break
+            }
+
+            guard let currentMetadata = await database.getMetadataAsync(predicate: NSPredicate(format: "ocId == %@", metadata.ocId)),
+                  !currentMetadata.backgroundUploadCancellationRequested else {
+                continue
+            }
             let assets = PHAsset.fetchAssets(withLocalIdentifiers: [metadata.assetLocalIdentifier], options: nil)
 
             guard let asset = assets.firstObject else {
-                logError("Asset not found: \(metadata.assetLocalIdentifier), file: \(metadata.fileName)")
+                await database.deleteMetadataAsync(id: metadata.ocId)
+                madeProgress = true
+                logInfo("Deleted pending background upload metadata for missing asset \(metadata.assetLocalIdentifier), file: \(metadata.fileName)")
                 continue
             }
 
             guard let resource = uploadResource(for: asset, metadata: metadata) else {
-                logError("Upload resource not found for asset \(metadata.assetLocalIdentifier)")
+                await database.deleteMetadataAsync(id: metadata.ocId)
+                madeProgress = true
+
+                logInfo(
+                    "Deleted pending background upload metadata because the resource is no longer available for asset \(metadata.assetLocalIdentifier), file: \(metadata.fileName)"
+                )
+
                 continue
             }
 
@@ -58,7 +79,14 @@ extension BackgroundUploadExtension {
 
             var jobIdentifier: String?
 
+            // PhotoKit job creation must happen inside its library change transaction.
             try library.performChangesAndWait {
+                guard let current = self.database.getTableAccount(account: account.account),
+                      current.autoUploadStart,
+                      current.autoUploadSessionIdentifier == account.autoUploadSessionIdentifier,
+                      let currentMetadata = self.database.getMetadata(predicate: NSPredicate(format: "ocId == %@", metadata.ocId)),
+                      !currentMetadata.backgroundUploadCancellationRequested,
+                      currentMetadata.backgroundUploadJobIdentifier == "pending" else { return }
                 let request = PHAssetResourceUploadJobChangeRequest.creationRequestForJob(destination: destination, resource: resource)
                 jobIdentifier = request.placeholderForCreatedAssetResourceUploadJob?.localIdentifier
             }
@@ -68,13 +96,23 @@ extension BackgroundUploadExtension {
                 continue
             }
 
-            metadata.backgroundUploadJobIdentifier = jobIdentifier
-            metadata.status = global.metadataStatusUploading
-            metadata.sessionDate = Date()
-            metadata.sessionError = ""
-            metadata.errorCode = 0
+            await persistMetadataState(
+                .uploading(jobIdentifier: jobIdentifier, incrementRetryCount: false),
+                metadata: metadata
+            )
 
-            await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
+            guard let savedMetadata = await database.getMetadataAsync(predicate: NSPredicate(format: "ocId == %@", metadata.ocId)),
+                  !savedMetadata.backgroundUploadCancellationRequested else {
+                _ = try await cancelRequestedUploadJobs()
+                continue
+            }
+            if let current = database.getTableAccount(account: account.account),
+               !current.autoUploadStart || current.autoUploadSessionIdentifier != account.autoUploadSessionIdentifier {
+                metadata.backgroundUploadCancellationRequested = true
+                await database.updateBackgroundUploadMetadataAsync(metadata, expectedJobIdentifier: jobIdentifier)
+                _ = try await cancelRequestedUploadJobs()
+                break
+            }
 
             madeProgress = true
 
@@ -84,6 +122,8 @@ extension BackgroundUploadExtension {
         return madeProgress
     }
 
+    /// Cancels jobs requested by the app and recovers jobs whose identifier was not persisted after creation.
+    /// A job is treated as orphaned only when no pending metadata matches its asset and destination.
     func cancelRequestedUploadJobs() async throws -> Bool {
         let library = PHPhotoLibrary.shared()
         var madeProgress = false
@@ -92,7 +132,7 @@ extension BackgroundUploadExtension {
         for index in 0..<cancellableJobs.count {
             let job = cancellableJobs.object(at: index)
             let jobIdentifier = job.localIdentifier
-            let metadata = await database.getMetadataAsync(backgroundUploadJobIdentifier: jobIdentifier)
+            let metadata = await resolveMetadata(for: job)
 
             guard let metadata else {
                 guard try cancel(job: job, library: library) else {
@@ -101,7 +141,7 @@ extension BackgroundUploadExtension {
                 }
 
                 madeProgress = true
-                logInfo("Cancelled orphan background upload job \(jobIdentifier)", persist: true)
+                logInfo("Cancelled orphan background upload job \(jobIdentifier)")
                 continue
             }
 
@@ -116,17 +156,24 @@ extension BackgroundUploadExtension {
 
             await database.deleteMetadataAsync(id: metadata.ocId)
             madeProgress = true
-            logInfo("Cancelled background upload job \(jobIdentifier), file: \(metadata.fileName)", persist: true)
+            logInfo("Cancelled background upload job \(jobIdentifier), file: \(metadata.fileName)")
         }
 
         let retryJobs = PHAssetResourceUploadJob.fetchJobs(action: .retry, options: nil)
         let acknowledgeJobs = PHAssetResourceUploadJob.fetchJobs(action: .acknowledge, options: nil)
+        var handledTerminalJobIdentifiers = Set<String>()
 
         for jobs in [retryJobs, acknowledgeJobs] {
             for index in 0..<jobs.count {
                 let job = jobs.object(at: index)
                 let jobIdentifier = job.localIdentifier
-                let metadata = await database.getMetadataAsync(backgroundUploadJobIdentifier: jobIdentifier)
+
+                // Failed jobs can appear in both collections; acknowledge each one only once.
+                guard handledTerminalJobIdentifiers.insert(jobIdentifier).inserted else {
+                    continue
+                }
+
+                let metadata = await resolveMetadata(for: job)
 
                 guard let metadata else {
                     guard try acknowledge(job: job, library: library) else {
@@ -135,11 +182,19 @@ extension BackgroundUploadExtension {
                     }
 
                     madeProgress = true
-                    logInfo("Acknowledged orphan background upload job \(jobIdentifier)", persist: true)
+                    logInfo("Acknowledged orphan background upload job \(jobIdentifier)")
                     continue
                 }
 
                 guard metadata.backgroundUploadCancellationRequested else {
+                    continue
+                }
+
+                if !(job.responseHeaderFields?["oc-fileid"] ?? "").isEmpty {
+                    guard await processUploadSuccess(metadata: metadata, job: job) else { continue }
+                    await persistMetadataState(.completed, metadata: metadata)
+                } else if job.state == .succeeded {
+                    logError("Stop deferred for successful job without oc-fileid: \(jobIdentifier)")
                     continue
                 }
 
@@ -148,16 +203,20 @@ extension BackgroundUploadExtension {
                     continue
                 }
 
-                await database.deleteMetadataAsync(id: metadata.ocId)
+                if metadata.status != global.metadataStatusNormal {
+                    await database.deleteMetadataAsync(id: metadata.ocId)
+                }
                 madeProgress = true
-                logInfo("Acknowledged cancelled background upload job \(jobIdentifier), state: \(job.state.rawValue)", persist: true)
+                logInfo("Acknowledged cancelled background upload job \(jobIdentifier), state: \(job.state.rawValue)")
             }
         }
 
         return madeProgress
     }
 
-    func retryUploadJobs() async throws -> Bool {
+    /// Examines jobs for which PhotoKit offers a retry and decides whether to retry or acknowledge them.
+    /// Server-confirmed uploads and permanent failures are acknowledged instead of being uploaded again.
+    func processRetryableUploadJobs() async throws -> Bool {
         let jobs = PHAssetResourceUploadJob.fetchJobs(action: .retry, options: nil)
 
         guard jobs.count > 0 else {
@@ -171,7 +230,7 @@ extension BackgroundUploadExtension {
             let job = jobs.object(at: index)
             let jobIdentifier = job.localIdentifier
 
-            guard let metadata = await database.getMetadataAsync(backgroundUploadJobIdentifier: jobIdentifier) else {
+            guard let metadata = await resolveMetadata(for: job) else {
                 guard try acknowledge(job: job, library: library) else {
                     logError("Unable to acknowledge orphan retry job \(jobIdentifier)")
                     continue
@@ -179,42 +238,89 @@ extension BackgroundUploadExtension {
 
                 madeProgress = true
 
-                logInfo("Acknowledged orphan retry job \(jobIdentifier)", persist: true)
+                logInfo("Acknowledged orphan retry job \(jobIdentifier)")
                 continue
             }
 
             guard !metadata.backgroundUploadCancellationRequested else {
-                logDebug("Skipping retry for cancellation-requested job \(jobIdentifier)")
+                logInfo("Skipping retry for cancellation-requested job \(jobIdentifier)")
                 continue
             }
 
-            let error = job.error.map { $0 as NSError }
+            let sessionIdentifier = database.getTableAccount(account: metadata.account)?.autoUploadSessionIdentifier ?? ""
+            logUploadJobDiagnostics(job: job, action: "retry")
 
-            logInfo("Retryable job \(jobIdentifier), error domain: \(error?.domain ?? "<nil>"), code: \(error?.code ?? 0), description: \(error?.localizedDescription ?? "<nil>"), headers: \(job.responseHeaderFields ?? [:])")
-
-            let authenticationRequired = job.responseHeaderFields?["www-authenticate"] != nil || (error?.domain == NSURLErrorDomain && error?.code == URLError.userAuthenticationRequired.rawValue)
-
-            if authenticationRequired {
-                await updateMetadataForUploadFailure(metadata: metadata, job: job)
-
-                guard try acknowledge(job: job, library: library) else {
-                    logError("Unable to acknowledge authentication-failed job \(jobIdentifier)")
+            if hasConfirmedUploadResponse(job: job) {
+                // Nextcloud committed the file even though PhotoKit classified the overwrite as failed.
+                // First persist the successful response in Realm, including the server file identifier,
+                // auto-upload history, and any pending Live Photo component.
+                guard await processUploadSuccess(metadata: metadata, job: job) else {
                     continue
                 }
 
-                metadata.backgroundUploadJobIdentifier = "pending"
-                metadata.backgroundUploadNextRetryDate = nil
-                await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
+                // Close local tracking before acknowledging PhotoKit. If the extension stops between
+                // these operations, the remaining terminal job is safely acknowledged as an orphan.
+                await persistMetadataState(.completed, metadata: metadata)
+
+                // Acknowledgement is the final confirmation to PhotoKit: it removes the completed job
+                // from the system queue and prevents PhotoKit from uploading the same resource again.
+                guard try acknowledge(job: job, library: library) else {
+                    logError("Unable to acknowledge server-confirmed retry job \(jobIdentifier)")
+                    continue
+                }
 
                 madeProgress = true
-                logError("Stopped background upload after authentication failure for \(metadata.fileName), job: \(jobIdentifier)")
+                logInfo("Accepted server-confirmed upload for \(metadata.fileName), job: \(jobIdentifier)")
+                continue
+            }
+
+            let authenticationRequired = isAuthenticationFailure(job: job)
+            let retryLimitReached = !canAutomaticallyRetry(metadata: metadata)
+            let queueSuspended = preferences.isBackgroundUploadSuspended(account: metadata.account)
+
+            // Stop before a fourth upload, invalid credentials, or work on a suspended account queue.
+            if authenticationRequired || retryLimitReached || queueSuspended {
+                if authenticationRequired {
+                    // Invalid credentials affect every file, so suspend the account immediately.
+                    preferences.setBackgroundUploadSuspended(true, account: metadata.account)
+                } else if retryLimitReached,
+                          !queueSuspended,
+                          recordTerminalUploadFailure(metadata: metadata) {
+                    logError("Suspended background upload after \(maximumConsecutiveBackgroundUploadFailures) consecutive asset failures for account \(metadata.account)")
+                }
+
+                await updateMetadataForUploadFailure(metadata: metadata, job: job)
+
+                guard try acknowledge(job: job, library: library) else {
+                    logError("Unable to acknowledge stopped job \(jobIdentifier)")
+                    continue
+                }
+
+                // Keep the failed transfer available for an explicit retry from the host app.
+                await persistMetadataState(.manualRetryRequired, metadata: metadata, sessionIdentifier: sessionIdentifier)
+
+                madeProgress = true
+                if authenticationRequired {
+                    logError("Stopped background upload after authentication failure for \(metadata.fileName), job: \(jobIdentifier)")
+                } else if retryLimitReached {
+                    logError("Stopped background upload after \(maximumBackgroundUploadAttempts) failed attempts for \(metadata.fileName), job: \(jobIdentifier)")
+                } else {
+                    logInfo("Stopped background upload because the account queue is suspended for \(metadata.fileName), job: \(jobIdentifier)")
+                }
                 continue
             }
 
             let assets = PHAsset.fetchAssets(withLocalIdentifiers: [metadata.assetLocalIdentifier], options: nil)
 
             guard let asset = assets.firstObject else {
-                logError("Retry asset not found for job \(jobIdentifier), asset: \(metadata.assetLocalIdentifier)")
+                guard try acknowledge(job: job, library: library) else {
+                    logError("Unable to acknowledge retry job for missing asset \(jobIdentifier)")
+                    continue
+                }
+
+                await database.deleteMetadataAsync(id: metadata.ocId)
+                madeProgress = true
+                logInfo("Acknowledged retry job and deleted metadata for missing asset \(metadata.assetLocalIdentifier), file: \(metadata.fileName)")
                 continue
             }
 
@@ -223,9 +329,16 @@ extension BackgroundUploadExtension {
                 continue
             }
 
+            guard let retryAccount = database.getTableAccount(account: metadata.account),
+                  retryAccount.autoUploadStart else { continue }
             var retryRequested = false
 
             try library.performChangesAndWait {
+                guard let current = self.database.getTableAccount(account: metadata.account),
+                      current.autoUploadStart,
+                      current.autoUploadSessionIdentifier == retryAccount.autoUploadSessionIdentifier,
+                      let currentMetadata = self.database.getMetadata(predicate: NSPredicate(format: "ocId == %@", metadata.ocId)),
+                      !currentMetadata.backgroundUploadCancellationRequested else { return }
                 guard let request = PHAssetResourceUploadJobChangeRequest(for: job) else {
                     return
                 }
@@ -239,18 +352,19 @@ extension BackgroundUploadExtension {
                 continue
             }
 
-            if metadata.backgroundUploadRetryCount < Int.max {
-                metadata.backgroundUploadRetryCount += 1
+            // PhotoKit is about to perform the next upload attempt for the same job.
+            await persistMetadataState(
+                .uploading(jobIdentifier: jobIdentifier, incrementRetryCount: true),
+                metadata: metadata
+            )
+
+            if let current = database.getTableAccount(account: metadata.account),
+               !current.autoUploadStart || current.autoUploadSessionIdentifier != retryAccount.autoUploadSessionIdentifier {
+                metadata.backgroundUploadCancellationRequested = true
+                await database.updateBackgroundUploadMetadataAsync(metadata, expectedJobIdentifier: jobIdentifier)
+                _ = try await cancelRequestedUploadJobs()
+                continue
             }
-
-            metadata.backgroundUploadNextRetryDate = nil
-            metadata.sessionDate = Date()
-            metadata.sessionError = ""
-            metadata.errorCode = 0
-            metadata.status = global.metadataStatusUploading
-
-            await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
-
             madeProgress = true
 
             logInfo("Retry requested for \(metadata.fileName), job: \(jobIdentifier)")
@@ -259,6 +373,8 @@ extension BackgroundUploadExtension {
         return madeProgress
     }
 
+    /// Records terminal job results in Realm before acknowledging them to free PhotoKit capacity.
+    /// Successful uploads are finalized; retryable failures create pending work for a new job.
     func acknowledgeUploadJobs() async throws -> Bool {
         let jobs = PHAssetResourceUploadJob.fetchJobs(action: .acknowledge, options: nil)
 
@@ -273,7 +389,7 @@ extension BackgroundUploadExtension {
             let job = jobs.object(at: index)
             let jobIdentifier = job.localIdentifier
 
-            guard let metadata = await database.getMetadataAsync(backgroundUploadJobIdentifier: jobIdentifier) else {
+            guard let metadata = await resolveMetadata(for: job) else {
                 guard try acknowledge(job: job, library: library) else {
                     logError("Unable to acknowledge orphan job \(jobIdentifier)")
                     continue
@@ -281,15 +397,16 @@ extension BackgroundUploadExtension {
 
                 madeProgress = true
 
-                logInfo("Acknowledged orphan job \(jobIdentifier)", persist: true)
+                logInfo("Acknowledged orphan job \(jobIdentifier)")
                 continue
             }
 
             guard !metadata.backgroundUploadCancellationRequested else {
-                logDebug("Skipping normal acknowledgement for cancellation-requested job \(jobIdentifier)")
+                logInfo("Skipping normal acknowledgement for cancellation-requested job \(jobIdentifier)")
                 continue
             }
 
+            let sessionIdentifier = database.getTableAccount(account: metadata.account)?.autoUploadSessionIdentifier ?? ""
             let uploadSucceeded: Bool
             let createNewJob: Bool
 
@@ -299,56 +416,116 @@ extension BackgroundUploadExtension {
                 createNewJob = false
 
             case .failed:
-                await updateMetadataForUploadFailure(metadata: metadata, job: job)
-                uploadSucceeded = false
-                createNewJob = true
+                logUploadJobDiagnostics(job: job, action: "acknowledge")
+
+                if hasConfirmedUploadResponse(job: job) {
+                    // A valid oc-fileid takes precedence over PhotoKit's failed state for HTTP 204.
+                    uploadSucceeded = await processUploadSuccess(metadata: metadata, job: job)
+                    createNewJob = false
+                    logInfo("Accepted server-confirmed upload for \(metadata.fileName), job: \(jobIdentifier)")
+                } else {
+                    let authenticationRequired = isAuthenticationFailure(job: job)
+                    let retryLimitReached = !canAutomaticallyRetry(metadata: metadata)
+                    let queueSuspended = preferences.isBackgroundUploadSuspended(account: metadata.account)
+
+                    if authenticationRequired {
+                        // Invalid credentials affect every file, so suspend the account immediately.
+                        preferences.setBackgroundUploadSuspended(true, account: metadata.account)
+                    } else if retryLimitReached,
+                              !queueSuspended,
+                              recordTerminalUploadFailure(metadata: metadata) {
+                        logError("Suspended background upload after \(maximumConsecutiveBackgroundUploadFailures) consecutive asset failures for account \(metadata.account)")
+                    }
+
+                    await updateMetadataForUploadFailure(metadata: metadata, job: job)
+                    uploadSucceeded = false
+                    createNewJob = !authenticationRequired && !retryLimitReached && !queueSuspended
+                }
 
             default:
+                logUploadJobDiagnostics(job: job, action: "acknowledge")
                 logError("Unexpected state \(job.state.rawValue) for job \(jobIdentifier)")
                 continue
             }
 
+            if uploadSucceeded {
+                // Persist the closed local state first. If acknowledgement is interrupted, the
+                // remaining PhotoKit job is harmless and will be cleaned up as an orphan next time.
+                await persistMetadataState(.completed, metadata: metadata)
+            }
+
+            // The terminal result is now stored locally; acknowledge it to release PhotoKit's job slot.
             guard try acknowledge(job: job, library: library) else {
                 logError("Unable to acknowledge job \(jobIdentifier)")
                 continue
             }
 
-            if uploadSucceeded {
-                metadata.backgroundUploadJobIdentifier = ""
-                metadata.backgroundUploadRetryCount = 0
-                metadata.backgroundUploadNextRetryDate = nil
-
-                await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
-            } else if createNewJob {
-                if metadata.backgroundUploadRetryCount < Int.max {
-                    metadata.backgroundUploadRetryCount += 1
-                }
-
-                metadata.backgroundUploadJobIdentifier = "pending"
-                metadata.backgroundUploadNextRetryDate = nil
-                metadata.sessionTaskIdentifier = 0
-                metadata.sessionDate = Date()
-                metadata.status = global.metadataStatusWaitUpload
-
-                await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
+            if !uploadSucceeded && createNewJob {
+                // A PhotoKit job can be retried only once; create a fresh job for the remaining attempt.
+                await persistMetadataState(.pendingRetry, metadata: metadata, sessionIdentifier: sessionIdentifier)
 
                 logInfo("Prepared new background upload job for \(metadata.fileName), retry: \(metadata.backgroundUploadRetryCount)")
-            } else {
-                metadata.backgroundUploadJobIdentifier = "pending"
-                metadata.backgroundUploadNextRetryDate = nil
-                await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
+            } else if !uploadSucceeded {
+                // `uploadError` prevents automatic scheduling while `pending` enables manual retry.
+                await persistMetadataState(.manualRetryRequired, metadata: metadata, sessionIdentifier: sessionIdentifier)
 
-                logInfo("Prepared new background upload job for \(metadata.fileName), retry: \(metadata.backgroundUploadRetryCount)")
+                logInfo("Background upload requires a manual retry for \(metadata.fileName)")
             }
 
             madeProgress = true
 
-            logDebug("Acknowledged job \(jobIdentifier), state: \(job.state.rawValue)")
+            logInfo("Acknowledged job \(jobIdentifier), state: \(job.state.rawValue)")
         }
 
         return madeProgress
     }
 
+    /// Resolves a job through its stored identifier or reconnects it to metadata left pending by an interruption.
+    /// Asset identity narrows the candidates and the destination URL distinguishes Live Photo components.
+    private func resolveMetadata(for job: PHAssetResourceUploadJob) async -> tableMetadata? {
+        if let metadata = await database.getMetadataAsync(backgroundUploadJobIdentifier: job.localIdentifier) {
+            return metadata
+        }
+
+        guard let resource = PHAssetResource.assetResource(forUploadJob: job),
+              let destinationURL = job.destination.url else {
+            return nil
+        }
+
+        let candidates = await database.getPendingBackgroundUploadMetadatasAsync(
+            assetLocalIdentifier: resource.assetLocalIdentifier
+        )
+        let matchingCandidates = candidates.filter { metadata in
+            guard let metadataURL = metadata.serverUrlFileName.encodedToUrl as? URL else {
+                return false
+            }
+
+            return metadataURL == destinationURL
+        }
+
+        guard matchingCandidates.count == 1,
+              let metadata = matchingCandidates.first else {
+            if matchingCandidates.count > 1 {
+                logError("Unable to recover job \(job.localIdentifier): multiple pending metadata match its destination")
+            }
+            return nil
+        }
+
+        // PhotoKit committed the job before the previous process could store its identifier in Realm.
+        await persistMetadataState(
+            .uploading(jobIdentifier: job.localIdentifier, incrementRetryCount: false),
+            metadata: metadata
+        )
+
+        logInfo(
+            "Recovered background upload job \(job.localIdentifier), file: \(metadata.fileName), " +
+            "resource: \(resource.filename ?? "<unknown>")"
+        )
+        return await database.getMetadataAsync(backgroundUploadJobIdentifier: job.localIdentifier)
+    }
+
+    /// Resolves the Photos resource represented by a metadata record, including Live Photo components.
+    /// It prefers an exact filename match before falling back to the asset's primary resource type.
     private func uploadResource(for asset: PHAsset, metadata: tableMetadata) -> PHAssetResource? {
         let resources = PHAssetResource.assetResources(for: asset)
 
@@ -394,6 +571,9 @@ extension BackgroundUploadExtension {
         }
     }
 
+    /// Confirms to PhotoKit that the terminal result has already been persisted and can be discarded.
+    /// Acknowledgement removes the job from the system queue and prevents any further retry for it.
+    /// Returns `false` if PhotoKit cannot create a change request for the supplied job.
     private func acknowledge(job: PHAssetResourceUploadJob, library: PHPhotoLibrary) throws -> Bool {
         var acknowledged = false
 
@@ -402,6 +582,7 @@ extension BackgroundUploadExtension {
                 return
             }
 
+            // This is the actual confirmation to PhotoKit; it is not another server request.
             request.acknowledge()
             acknowledged = true
         }
@@ -409,6 +590,8 @@ extension BackgroundUploadExtension {
         return acknowledged
     }
 
+    /// Requests cancellation of a registered or pending PhotoKit job inside a library transaction.
+    /// Returns `false` if the job is no longer mutable by the time the change block executes.
     private func cancel(job: PHAssetResourceUploadJob, library: PHPhotoLibrary) throws -> Bool {
         var cancelled = false
 
@@ -424,6 +607,8 @@ extension BackgroundUploadExtension {
         return cancelled
     }
 
+    /// Computes free PhotoKit capacity by deduplicating jobs exposed through all actionable states.
+    /// The extension intentionally caps its own queue at 20 jobs even if the system limit is higher.
     func availableUploadJobSlots() -> Int {
         let actions: [PHAssetResourceUploadJob.Action] = [.process, .retry, .acknowledge]
         var jobIdentifiers = Set<String>()
@@ -440,6 +625,8 @@ extension BackgroundUploadExtension {
         return max(0, jobLimit - jobIdentifiers.count)
     }
 
+    /// Reports whether PhotoKit still exposes jobs requiring processing, retry, or acknowledgement.
+    /// This keeps the extension scheduled while system-managed upload work remains outstanding.
     func hasActiveUploadJobs() -> Bool {
         PHAssetResourceUploadJob.fetchJobs(action: .process, options: nil).count > 0 ||
         PHAssetResourceUploadJob.fetchJobs(action: .retry, options: nil).count > 0 ||

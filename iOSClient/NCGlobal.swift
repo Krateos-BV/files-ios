@@ -55,7 +55,8 @@ final class NCGlobal: Sendable {
 
     // Avatar
     //
-    let avatarSize: Int                             = 128 * Int(UIScreen.main.scale)
+    // Shared download resolution for a 128-point avatar at 3x scale, also used without a UI context.
+    let avatarSize: Int                             = 384
     let avatarSizeRounded: Int                      = 128
 
     // Preview size
@@ -68,9 +69,9 @@ final class NCGlobal: Sendable {
     let previewExt512                               = ".512.preview.jpg"
     let previewExt256                               = ".256.preview.jpg"
 
-    func getSizeExtension(column: Int) -> String {
+    func getSizeExtension(column: Int, viewWidth: CGFloat) -> String {
         if column == 0 { return previewExt256 }
-        let width = UIScreen.main.bounds.width / CGFloat(column)
+        let width = viewWidth / CGFloat(column)
 
          switch (width * 4) {
          case 0...384:
@@ -388,7 +389,6 @@ final class NCGlobal: Sendable {
     let logTagServiceProficer               = "SERVICE PROVIDER"
     let logTagDatabase                      = "DB"
     let logTagSpeedUpSyncMetadata           = "SYNC METADATA"
-    let logTagNetworkingTasks               = "NETWORKING TASKS"
     let logTagMetadataUploadTransfers       = "METADATA UPLOAD TRANSFERS"
     let logTagMetadataDownloadTransfers     = "METADATA DOWNLOAD TRANSFERS"
     let logTagViewer                        = "VIEWERS"
