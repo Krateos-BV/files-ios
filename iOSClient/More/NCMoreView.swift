@@ -61,6 +61,7 @@ struct NCMoreView: View {
                     .frame(height: 32)
                     .allowsHitTesting(false)
             }
+            .hideTopScrollEdgeEffect()
 
             quotaSection
         }
@@ -103,7 +104,7 @@ struct NCMoreView: View {
                                                       isAnimated: model.autoUploadStart)
                         .frame(width: 39)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(NSLocalizedString("_settings_autoupload_", comment: ""))
                             .font(.body)
                             .foregroundColor(Color(NCBrandColor.shared.textColor))
@@ -112,6 +113,7 @@ struct NCMoreView: View {
                             Text(autoUploadCounter.itemsLeftSummary)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
@@ -122,6 +124,7 @@ struct NCMoreView: View {
                         .foregroundColor(Color(.tertiaryLabel))
                 }
                 .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 .frame(minHeight: 54)
                 .contentShape(Rectangle())
             }

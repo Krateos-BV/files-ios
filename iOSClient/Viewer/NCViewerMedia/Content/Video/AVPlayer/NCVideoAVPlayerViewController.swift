@@ -60,6 +60,12 @@ final class NCVideoAVPlayerViewController: UIViewController {
 
     private let floatingTitleView = NCMediaViewerFloatingTitleView()
 
+    private lazy var moreNavigationItem = NCContextMenuViewer.mediaNavigationItem(
+        viewController: self,
+        metadataProvider: { [weak self] in self?.metadata },
+        controllerProvider: { [weak self] in self?.contextMenuController }
+    )
+
     private lazy var floatingTitleDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = .current
@@ -82,6 +88,7 @@ final class NCVideoAVPlayerViewController: UIViewController {
     private var playbackEndObserver: NSObjectProtocol?
     private var playbackFailureObserver: NSObjectProtocol?
     private var playbackStartupTimeoutTask: Task<Void, Never>?
+    private var audioSessionTask: Task<Void, Never>?
     private var timeObserverToken: Any?
     private var preparedURL: URL?
     private var hasReportedPlaybackError = false
@@ -96,14 +103,17 @@ final class NCVideoAVPlayerViewController: UIViewController {
         player.timeControlStatus != .playing && !isPlaybackRequested
     }
 
-    internal func setNavigationBarVisible(
-        _ isVisible: Bool,
-        animated: Bool
-    ) {
-        navigationController?.setNavigationBarHidden(
+    internal func setNavigationBarVisible(_ isVisible: Bool, animated: Bool) {
+        guard let navigationController else { return }
+        navigationController.setNavigationBarHidden(
             !isVisible,
             animated: animated
         )
+        navigationController.view.layoutIfNeeded()
+        updateControlsNavigationBar()
+        navigationController.transitionCoordinator?.animate(alongsideTransition: nil) { [weak self] _ in
+            self?.updateControlsNavigationBar()
+        }
     }
 
     // MARK: - Init
@@ -204,7 +214,6 @@ final class NCVideoAVPlayerViewController: UIViewController {
 
         configureNavigationItem()
         updateTitleLabel(metadata: metadata)
-        configureAudioSession()
         configurePlayerLayer()
         configureSwipeGestures()
         configureTapGesture()
@@ -229,10 +238,7 @@ final class NCVideoAVPlayerViewController: UIViewController {
         updateControlsNavigationBar()
     }
 
-    override func viewWillTransition(
-        to size: CGSize,
-        with coordinator: UIViewControllerTransitionCoordinator
-    ) {
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(
             to: size,
             with: coordinator
@@ -316,6 +322,15 @@ final class NCVideoAVPlayerViewController: UIViewController {
             target: self,
             action: #selector(closeTapped)
         )
+
+        navigationItem.rightBarButtonItem = moreNavigationItem
+    }
+
+    func updateMetadata(_ metadata: tableMetadata) {
+        guard self.metadata.ocId == metadata.ocId, self.metadata.account == metadata.account else { return }
+
+        self.metadata = metadata
+        updateTitleLabel(metadata: metadata)
     }
 
     private func updateTitleLabel(metadata: tableMetadata) {
@@ -514,8 +529,7 @@ final class NCVideoAVPlayerViewController: UIViewController {
 
         if shouldAutoPlayOnStart,
            player.timeControlStatus != .playing {
-            player.play()
-            startPlaybackStartupTimeout()
+            playWhenAudioSessionIsReady()
         }
 
         updatePlayPauseButton()
@@ -524,6 +538,8 @@ final class NCVideoAVPlayerViewController: UIViewController {
     }
 
     private func stop() {
+        audioSessionTask?.cancel()
+        audioSessionTask = nil
         preparedURL = nil
         isPlaybackRequested = false
         playbackPresentationContext.reset()
@@ -693,10 +709,10 @@ final class NCVideoAVPlayerViewController: UIViewController {
         }
 
         if shouldAutoPlayOnStart,
+           isPlaybackRequested,
            player.timeControlStatus != .playing {
-            isPlaybackRequested = true
             updatePlayPauseButton()
-            player.play()
+            playWhenAudioSessionIsReady()
         } else {
             updatePlayPauseButton()
         }
@@ -712,7 +728,7 @@ final class NCVideoAVPlayerViewController: UIViewController {
     private func startPlaybackStartupTimeout() {
         cancelPlaybackStartupTimeout()
 
-        guard shouldAutoPlayOnStart,
+        guard isPlaybackRequested,
               player.timeControlStatus != .playing else {
             return
         }
@@ -781,7 +797,8 @@ final class NCVideoAVPlayerViewController: UIViewController {
             isPlaybackRequested = true
 
         case .paused:
-            if !playbackPresentationContext.shouldSuppressAutomaticControlsPresentation,
+            if audioSessionTask == nil,
+               !playbackPresentationContext.shouldSuppressAutomaticControlsPresentation,
                player.currentItem?.status == .readyToPlay ||
                 player.currentItem?.status == .failed ||
                 player.currentItem == nil {
@@ -880,7 +897,7 @@ final class NCVideoAVPlayerViewController: UIViewController {
                     return
                 }
 
-                player.play()
+                self.playWhenAudioSessionIsReady()
                 self.updateProgressControls()
                 self.scheduleControlsHide()
             }
@@ -917,22 +934,27 @@ final class NCVideoAVPlayerViewController: UIViewController {
             || bottomControlsFrame.contains(location)
     }
 
-    private func configureAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback,
-                mode: .moviePlayback,
-                options: []
-            )
+    func playWhenAudioSessionIsReady() {
+        guard player.currentItem != nil else { return }
+        isPlaybackRequested = true
+        guard audioSessionTask == nil else { return }
 
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            nkLog(
-                tag: NCGlobal.shared.logTagViewer,
-                emoji: .error,
-                message: "VIDEO AVPlayer audio session error: \(error.localizedDescription)",
-                consoleOnly: true
-            )
+        let playbackPlayer = player
+        let playbackURL = url
+        startPlaybackStartupTimeout()
+        audioSessionTask = Task { @MainActor [weak self] in
+            let activated = await NCVideoPlaybackController.configureAudioSession()
+            guard !Task.isCancelled, let self else { return }
+            audioSessionTask = nil
+            guard isPlaybackRequested, player === playbackPlayer, url == playbackURL else { return }
+            guard activated else {
+                reportPlaybackErrorIfNeeded()
+                return
+            }
+
+            player.play()
+            startPlaybackStartupTimeout()
+            updatePlayPauseButton()
         }
     }
 
@@ -987,30 +1009,22 @@ final class NCVideoAVPlayerViewController: UIViewController {
 // MARK: - Picture in Picture Delegate
 
 extension NCVideoAVPlayerViewController: AVPictureInPictureControllerDelegate {
-    func pictureInPictureControllerWillStartPictureInPicture(
-        _ pictureInPictureController: AVPictureInPictureController
-    ) {
+    func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
 
         stopControlsHideTimer()
         hideControls(animated: false)
     }
 
-    func pictureInPictureControllerDidStartPictureInPicture(
-        _ pictureInPictureController: AVPictureInPictureController
-    ) {
+    func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
 
         stopControlsHideTimer()
         hideControls(animated: false)
     }
 
-    func pictureInPictureControllerWillStopPictureInPicture(
-        _ pictureInPictureController: AVPictureInPictureController
-    ) {
+    func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
     }
 
-    func pictureInPictureControllerDidStopPictureInPicture(
-        _ pictureInPictureController: AVPictureInPictureController
-    ) {
+    func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         updatePlayPauseButton()
         updateProgressControls()
         updateSeekingState()
@@ -1023,10 +1037,7 @@ extension NCVideoAVPlayerViewController: AVPictureInPictureControllerDelegate {
         }
     }
 
-    func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        failedToStartPictureInPictureWithError error: Error
-    ) {
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         nkLog(
             tag: NCGlobal.shared.logTagViewer,
             emoji: .error,
@@ -1045,10 +1056,7 @@ extension NCVideoAVPlayerViewController: AVPictureInPictureControllerDelegate {
 
 extension NCVideoAVPlayerViewController: UIGestureRecognizerDelegate {
     // Keep AVPlayer touches compatible with viewer gestures, but isolate visible controls from global gestures.
-    func gestureRecognizer(
-        _ gestureRecognizer: UIGestureRecognizer,
-        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-    ) -> Bool {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         guard controlsVisible else {
             return true
         }
@@ -1064,10 +1072,7 @@ extension NCVideoAVPlayerViewController: UIGestureRecognizerDelegate {
     }
 
     // Keep global viewer gestures disabled while Picture in Picture is active or when visible controls receive the touch.
-    func gestureRecognizer(
-        _ gestureRecognizer: UIGestureRecognizer,
-        shouldReceive touch: UITouch
-    ) -> Bool {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard !isPictureInPictureActive else {
             return false
         }

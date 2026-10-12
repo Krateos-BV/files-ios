@@ -8,9 +8,7 @@ import NextcloudKit
 struct NCVideoURLResolver {
     private let utilityFileSystem = NCUtilityFileSystem()
 
-    func getVideoURL(
-        metadata: tableMetadata
-    ) async -> (url: URL?, autoplay: Bool, error: NKError) {
+    func getVideoURL(metadata: tableMetadata) async -> (url: URL?, autoplay: Bool, error: NKError) {
         if !metadata.url.isEmpty {
             if metadata.url.hasPrefix("/") {
                 return (
@@ -45,26 +43,12 @@ struct NCVideoURLResolver {
         return await getDirectDownloadURL(metadata: metadata)
     }
 
-    private func getDirectDownloadURL(
-        metadata: tableMetadata
-    ) async -> (url: URL?, autoplay: Bool, error: NKError) {
+    private func getDirectDownloadURL(metadata: tableMetadata) async -> (url: URL?, autoplay: Bool, error: NKError) {
         await withCheckedContinuation { continuation in
             NextcloudKit.shared.getDirectDownload(
                 fileId: metadata.fileId,
                 account: metadata.account
-            ) { task in
-                Task {
-                    let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(
-                        account: metadata.account,
-                        path: metadata.fileId,
-                        name: "getDirectDownload"
-                    )
-
-                    await NCNetworking.shared.networkingTasks.track(
-                        identifier: identifier,
-                        task: task
-                    )
-                }
+            ) { _ in
             } completion: { _, urlString, _, error in
                 guard error == .success,
                       let urlString,

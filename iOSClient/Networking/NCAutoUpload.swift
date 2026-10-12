@@ -8,6 +8,7 @@ import NextcloudKit
 import Photos
 import OrderedCollections
 import LucidBanner
+import os
 
 class NCAutoUpload: NSObject {
     static let shared = NCAutoUpload()
@@ -15,6 +16,7 @@ class NCAutoUpload: NSObject {
     private let database = NCManageDatabase.shared
     private let global = NCGlobal.shared
     private let networking = NCNetworking.shared
+    private let backgroundSyncRunning = OSAllocatedUnfairLock(initialState: false)
 
     func initAutoUpload(controller: NCMainTabBarController? = nil) async -> Int {
         if #available(iOS 27, *),
@@ -88,9 +90,6 @@ class NCAutoUpload: NSObject {
 
         let result = await getCameraRollAssets(controller: controller, assetCollections: assetCollections, tblAccount: tblAccount)
 
-        // IMPORTANT: Always set to autoUploadSinceDate to now
-        await self.database.updateAccountPropertyAsync(\.autoUploadSinceDate, value: Date.now, account: tblAccount.account)
-
         model.onViewAppear()
 
         guard let assets = result.assets,
@@ -101,6 +100,7 @@ class NCAutoUpload: NSObject {
         }
 
         let num = await uploadAssets(controller: controller, tblAccount: tblAccount, assets: assets, fileNames: fileNames, filterExistingQueue: false)
+        model.onViewAppear()
         nkLog(debug: "Automatic upload \(num) upload")
     }
 
@@ -117,12 +117,18 @@ class NCAutoUpload: NSObject {
         let formatCompatibility = NCPreferences().formatCompatibility
         let keychainLivePhoto = NCPreferences().livePhoto
         let fileSystem = NCUtilityFileSystem()
-        let skipFileNames = await self.database.fetchSkipFileNamesAsync(account: tblAccount.account,
-                                                                        autoUploadServerUrlBase: autoUploadServerUrlBase)
+        let knownFileNames = await self.database.fetchAutoUploadFileNamesAsync(account: tblAccount.account, autoUploadServerUrlBase: autoUploadServerUrlBase)
+
+        var lastUploadedDate: Date?
+        var canAdvanceSinceDate = true
 
         nkLog(debug: "Automatic upload, new \(assets.count) assets found")
 
         for (index, asset) in assets.enumerated() {
+            guard !Task.isCancelled,
+                  let current = await database.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", tblAccount.account)),
+                  current.autoUploadStart,
+                  current.autoUploadSessionIdentifier == tblAccount.autoUploadSessionIdentifier else { return 0 }
             let fileName = fileNames[index]
 
             let sourceFileExtension = (fileName as NSString).pathExtension.lowercased()
@@ -132,12 +138,21 @@ class NCAutoUpload: NSObject {
                 nativeFormat: !formatCompatibility
             )
 
-            if skipFileNames.contains(fileNameCompatible) || skipFileNames.contains(fileName) {
+            let mediaType = asset.mediaType
+            let isLivePhoto = asset.mediaSubtypes.contains(.photoLive) && keychainLivePhoto
+            let pairedFileName = (fileNameCompatible as NSString).deletingPathExtension + ".mov"
+            let primaryUploaded = knownFileNames.uploaded.contains(fileNameCompatible) || knownFileNames.uploaded.contains(fileName)
+            if primaryUploaded && (!isLivePhoto || knownFileNames.uploaded.contains(pairedFileName)) {
+                if canAdvanceSinceDate { lastUploadedDate = asset.creationDate ?? lastUploadedDate }
                 continue
             }
 
-            let mediaType = asset.mediaType
-            let isLivePhoto = asset.mediaSubtypes.contains(.photoLive) && keychainLivePhoto
+            // A later success cannot move the restart date past an unfinished photo or Live Photo.
+            canAdvanceSinceDate = false
+            if knownFileNames.queued.contains(fileNameCompatible) || knownFileNames.queued.contains(fileName) ||
+                (isLivePhoto && knownFileNames.queued.contains(pairedFileName)) {
+                continue
+            }
             let serverUrl = tblAccount.autoUploadCreateSubfolder
                 ? fileSystem.createGranularityPath(asset: asset, serverUrlBase: autoUploadServerUrlBase, granularity: tblAccount.autoUploadSubfolderGranularity)
                 : autoUploadServerUrlBase
@@ -155,6 +170,8 @@ class NCAutoUpload: NSObject {
                 metadata.livePhotoFile = (metadata.fileName as NSString).deletingPathExtension + ".mov"
             }
 
+            metadata.creationDate = (asset.creationDate ?? Date()) as NSDate
+            metadata.date = (asset.modificationDate ?? Date()) as NSDate
             metadata.assetLocalIdentifier = asset.localIdentifier
             metadata.autoUploadServerUrlBase = autoUploadServerUrlBase
             metadata.session = uploadSession
@@ -189,16 +206,9 @@ class NCAutoUpload: NSObject {
             metadatas.append(metadata)
         }
 
-        // Set last date in autoUploadOnlyNewSinceDate
-        if let metadata = metadatas.last {
-            let date = metadata.creationDate as Date
-            await self.database.updateAccountPropertyAsync(\.autoUploadSinceDate, value: date, account: session.account)
+        if let lastUploadedDate {
+            await database.updateAutoUploadSinceDateIfEnabledAsync(lastUploadedDate, account: tblAccount.account, sessionIdentifier: tblAccount.autoUploadSessionIdentifier)
         }
-
-        guard !metadatas.isEmpty else {
-            return 0
-        }
-
         let metadatasToAdd: [tableMetadata]
 
         if filterExistingQueue {
@@ -211,15 +221,19 @@ class NCAutoUpload: NSObject {
             return 0
         }
 
+        let entriesToAdd: [tableMetadata]
         if autoMkcol {
-            await self.database.addMetadatasAsync(metadatasToAdd)
+            entriesToAdd = metadatasToAdd
         } else {
             let metadatasFolder = await NCManageDatabaseCreateMetadata().createMetadatasFolderAsync(
                 assets: assets,
                 useSubFolder: tblAccount.autoUploadCreateSubfolder,
                 session: session)
-            await self.database.addMetadatasAsync(metadatasFolder + metadatasToAdd)
+            entriesToAdd = metadatasFolder + metadatasToAdd
         }
+
+        // A stopped or restarted scan cannot insert its old work.
+        await database.addAutoUploadMetadatasAsync(entriesToAdd, account: tblAccount.account, sessionIdentifier: tblAccount.autoUploadSessionIdentifier)
 
         return metadatasToAdd.count
     }
@@ -237,7 +251,6 @@ class NCAutoUpload: NSObject {
         guard hasPermission else {
             return (nil, nil)
         }
-        let autoUploadServerUrlBase = await self.database.getAccountAutoUploadServerUrlBaseAsync(account: tblAccount.account, urlBase: tblAccount.urlBase, userId: tblAccount.userId)
         var mediaPredicates: [NSPredicate] = []
         var datePredicates: [NSPredicate] = []
         let fetchOptions = PHFetchOptions()
@@ -251,9 +264,7 @@ class NCAutoUpload: NSObject {
         }
 
         if let autoUploadSinceDate = tblAccount.autoUploadSinceDate {
-            datePredicates.append(NSPredicate(format: "creationDate > %@", autoUploadSinceDate as NSDate))
-        } else if let lastDate = await self.database.fetchLastAutoUploadedDateAsync(account: tblAccount.account, autoUploadServerUrlBase: autoUploadServerUrlBase) {
-            datePredicates.append(NSPredicate(format: "creationDate > %@", lastDate as NSDate))
+            datePredicates.append(NSPredicate(format: "creationDate >= %@", autoUploadSinceDate as NSDate))
         }
 
         fetchOptions.predicate = {
@@ -290,7 +301,10 @@ class NCAutoUpload: NSObject {
             let result = PHAsset.fetchAssets(in: collection, options: fetchOptions)
             return result.objects(at: IndexSet(0..<result.count))
         }
-        let newAssets = OrderedSet(allAssets)
+        // Selected albums may overlap and are not globally ordered.
+        let newAssets = OrderedSet(allAssets).sorted {
+            ($0.creationDate ?? .distantPast) < ($1.creationDate ?? .distantPast)
+        }
         let fileNames = newAssets.compactMap { asset -> String? in
             let date = asset.creationDate ?? Date()
             return NCUtilityFileSystem().createFileName(asset.originalFilename, fileDate: date, fileType: asset.mediaType)
@@ -313,6 +327,17 @@ class NCAutoUpload: NSObject {
     //
     // The flow cooperates with Swift task cancellation triggered by BGTask expiration.
     func autoUploadBackgroundSync() async {
+        guard !Task.isCancelled else { return }
+        // Refresh, processing, and location tasks share this entry point.
+        // Keep the running flag set across awaits without holding the lock.
+        let acquired = backgroundSyncRunning.withLock { running in
+            guard !running else { return false }
+            running = true
+            return true
+        }
+        guard acquired else { return }
+        defer { backgroundSyncRunning.withLock { $0 = false } }
+
         if #available(iOS 27, *),
            await NCBackgroundUploadExtensionManager.shared.ensureEnabled() {
             return
@@ -394,28 +419,48 @@ class NCAutoUpload: NSObject {
         let cameraRoll = NCCameraRoll()
 
         for metadata in metadatasToUpload {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  let uploadAccount = await database.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", metadata.account)),
+                  uploadAccount.autoUploadStart else { return }
 
-            // Check whether the file already exists remotely.
-            let existsResult = await NCNetworking.shared.fileExists(
-                serverUrlFileName: metadata.serverUrlFileName,
-                account: metadata.account
-            )
+            // Forced uploads intentionally replace existing server resources.
+            if !uploadAccount.autoUploadForceReupload {
+                let existsResult = await NCNetworking.shared.fileExists(
+                    serverUrlFileName: metadata.serverUrlFileName,
+                    account: metadata.account
+                )
 
-            if existsResult == .success {
-                await NCManageDatabase.shared.deleteMetadataAsync(id: metadata.ocId)
-                continue
-            } else if existsResult.errorCode != 404 {
-                continue
+                if existsResult == .success && !metadata.isLivePhoto {
+                    await database.completeExistingAutoUploadAsync(metadata)
+                    continue
+                } else if existsResult != .success && existsResult.errorCode != 404 {
+                    continue
+                }
             }
 
             // Expand the seed into concrete metadata entries (for example, Live Photo pairs).
             let extractedMetadatas = await cameraRoll.extractCameraRoll(from: metadata)
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  let current = await database.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", metadata.account)),
+                  current.autoUploadStart,
+                  current.autoUploadSessionIdentifier == uploadAccount.autoUploadSessionIdentifier else { return }
 
             for extractedMetadata in extractedMetadatas {
                 guard !Task.isCancelled else { return }
+
+                if extractedMetadata.isLivePhoto && !uploadAccount.autoUploadForceReupload {
+                    let resourceExists = await NCNetworking.shared.fileExists(
+                        serverUrlFileName: extractedMetadata.serverUrlFileName,
+                        account: extractedMetadata.account
+                    )
+                    if resourceExists == .success {
+                        await database.completeExistingAutoUploadAsync(extractedMetadata)
+                        continue
+                    } else if resourceExists.errorCode != 404 {
+                        continue
+                    }
+                }
 
                 let err = await NCNetworking.shared.uploadFileInBackground(
                     metadata: extractedMetadata.detachedCopy()

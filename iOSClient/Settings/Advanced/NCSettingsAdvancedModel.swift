@@ -29,6 +29,10 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
     @Published var crashReporter: Bool = false
     // State variable for indicating whether the log file has been cleared.
     @Published var logFileCleared: Bool = false
+    // Log files shared by the app and its extensions.
+    @Published private(set) var logFiles: [URL] = []
+    @Published private(set) var isPreparingLogPreview = false
+    private var logPreviewDirectory: URL?
     // Properties for log level and cache deletion
     // State variable for storing the selected log level.
     @Published var selectedLogLevel: NKLogLevel = .normal
@@ -105,10 +109,17 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
     }
 
     /// Remove directory LOG
-    func clearLogFile() {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let logsFolder = documents.appendingPathComponent("Logs", isDirectory: true)
-        try? FileManager.default.removeItem(at: logsFolder)
+    @MainActor
+    func clearLogFile() async {
+        await Task.detached(priority: .utility) {
+            NextcloudKit.flushLogger()
+            let logsFolder = NCPreferences.sharedLogDirectory
+                ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    .appendingPathComponent("Logs", isDirectory: true)
+            try? FileManager.default.removeItem(at: logsFolder)
+            NKLogFileManager.createLogsFolder()
+        }.value
+        logFiles = []
     }
 
     /// Updates the value of `selectedInterval` in the keychain.
@@ -128,6 +139,11 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
 
             NCNetworking.shared.removeServerErrorAccount(self.session.account)
             NCManageDatabase.shared.clearDBCache()
+            do {
+                try await NCLocalDatabase.shared.clearDBCache()
+            } catch {
+                nkLog(error: "Unable to clear the local GRDB cache: \(error)")
+            }
 
             let ufs = NCUtilityFileSystem()
             ufs.removeGroupDirectoryProviderStorage()
@@ -161,19 +177,94 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
         } else { }
     }
 
-    /// Presents the log file viewer.
-    func viewLogFile() {
-        // Path of the current (active) log file
-        let currentLogURL = NKLogFileManager.shared.currentLogFileURL()
+    /// Loads the active and rotated log files from the shared App Group directory.
+    @MainActor
+    func loadLogFiles() async {
+        logFiles = await Task.detached(priority: .utility) {
+            NextcloudKit.flushLogger()
+            guard let logsFolder = NCPreferences.sharedLogDirectory,
+                  let files = try? FileManager.default.contentsOfDirectory(
+                    at: logsFolder,
+                    includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+                    options: [.skipsHiddenFiles]
+                  ) else { return [URL]() }
+            return files
+                .filter { $0.lastPathComponent == "log.txt" || ($0.lastPathComponent.hasPrefix("log-") && $0.pathExtension == "txt") }
+                .sorted { lhs, rhs in
+                    let lhsDate = try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                    let rhsDate = try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                    return (lhsDate ?? .distantPast) > (rhsDate ?? .distantPast)
+                }
+        }.value
+    }
 
-        // Create NCViewerQuickLook with the current log file
-        let viewerQuickLook = NCViewerQuickLook(
-            with: currentLogURL,
-            isEditingEnabled: false,
-            metadata: nil
-        )
+    /// Deletes a listed log file, coordinating with writes from the app and extensions.
+    @MainActor
+    func deleteLogFile(at url: URL) async throws {
+        guard logFiles.contains(url) else { return }
+        try await Task.detached(priority: .utility) {
+            NextcloudKit.flushLogger()
+            var coordinationError: NSError?
+            var deletionError: Error?
+            NSFileCoordinator(filePresenter: nil).coordinate(writingItemAt: url, options: .forDeleting, error: &coordinationError) { coordinatedURL in
+                do { try FileManager.default.removeItem(at: coordinatedURL) } catch { deletionError = error }
+            }
+            if let coordinationError { throw coordinationError }
+            if let deletionError { throw deletionError }
+        }.value
+        logFiles.removeAll { $0 == url }
+    }
 
-        controller?.present(viewerQuickLook, animated: true, completion: nil)
+    /// Returns the localized modification date and size shown below a log file name.
+    func logFileDetails(for url: URL) -> String {
+        guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]) else {
+            return ""
+        }
+
+        var details: [String] = []
+        if let date = values.contentModificationDate {
+            details.append(date.formatted(date: .abbreviated, time: .shortened))
+        }
+        if let fileSize = values.fileSize {
+            details.append(ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file))
+        }
+        return details.joined(separator: " · ")
+    }
+
+    /// Previews an immutable copy so Quick Look never coordinates the file used by the logger.
+    @MainActor
+    func viewLogFile(at url: URL) async throws {
+        guard !isPreparingLogPreview, let controller, controller.presentedViewController == nil else { return }
+        isPreparingLogPreview = true
+        defer { isPreparingLogPreview = false }
+        let previousDirectory = logPreviewDirectory
+        let previewURL = try await Task.detached(priority: .utility) {
+            NextcloudKit.flushLogger()
+            let fileManager = FileManager.default
+            let directory = fileManager.temporaryDirectory.appendingPathComponent("LogPreview-" + UUID().uuidString, isDirectory: true)
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            let destination = directory.appendingPathComponent(url.lastPathComponent)
+            do {
+                var coordinationError: NSError?
+                var copyError: Error?
+                NSFileCoordinator(filePresenter: nil).coordinate(readingItemAt: url, options: [], error: &coordinationError) { source in
+                    do { try fileManager.copyItem(at: source, to: destination) } catch { copyError = error }
+                }
+                if let coordinationError { throw coordinationError }
+                if let copyError { throw copyError }
+                if let previousDirectory { try? fileManager.removeItem(at: previousDirectory) }
+                return destination
+            } catch {
+                try? fileManager.removeItem(at: directory)
+                throw error
+            }
+        }.value
+        logPreviewDirectory = previewURL.deletingLastPathComponent()
+        guard !Task.isCancelled,
+              controller.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive,
+              controller.presentedViewController == nil else { return }
+        let viewerQuickLook = NCViewerQuickLook(with: previewURL, isEditingEnabled: false, metadata: nil)
+        controller.present(viewerQuickLook, animated: true)
     }
 }
 

@@ -359,10 +359,19 @@ actor NCNetworkingProcess {
         guard await MainActor.run(body: { UIApplication.shared.applicationState == .active }) else {
             return
         }
+
+        let account = currentAccount
         let livePhotoAccounts = await NCManageDatabase.shared.getLivePhotoAccounts()
         let localIdentifiers: [String]
         if NCPreferences().removePhotoCameraRoll {
-            localIdentifiers = await NCManageDatabase.shared.getAssetLocalIdentifiersUploadedAsync() ?? []
+            do {
+                localIdentifiers = try await NCLocalDatabase.shared
+                    .uploadedPhotoLibraryAssets(account: account)
+                    .map(\.assetLocalIdentifier)
+            } catch {
+                nkLog(error: "Unable to read uploaded photo library assets for \(account): \(error)")
+                localIdentifiers = []
+            }
         } else {
             localIdentifiers = []
         }
@@ -392,7 +401,13 @@ actor NCNetworkingProcess {
               await Self.removeUploadedAssets(localIdentifiers) else {
             return
         }
-        await NCManageDatabase.shared.clearAssetLocalIdentifiersAsync(localIdentifiers)
+
+        do {
+            try await NCLocalDatabase.shared.removePhotoLibraryAssets(account: account, assetLocalIdentifiers: localIdentifiers)
+        } catch {
+            nkLog(error: "Unable to remove deleted photo library assets for \(account): \(error)")
+            return
+        }
     }
 
     @MainActor
@@ -536,11 +551,13 @@ actor NCNetworkingProcess {
 
                 // AUTO-UPLOAD: CHECK FILE EXISTS
                 //
-                if metadata.sessionSelector == global.selectorUploadAutoUpload {
+                if metadata.sessionSelector == global.selectorUploadAutoUpload,
+                   let uploadAccount = await database.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", metadata.account)),
+                   !uploadAccount.autoUploadForceReupload {
                     let existsResult = await networking.fileExists(serverUrlFileName: metadata.serverUrlFileName, account: metadata.account)
                     if existsResult == .success {
-                        // File exists → delete from local metadata and skip
-                        await NCManageDatabase.shared.deleteMetadataAsync(id: metadata.ocId)
+                        // Preserve completion in the incremental upload history before removing the transfer.
+                        await database.completeExistingAutoUploadAsync(metadata)
                         continue
                     } else if existsResult.errorCode == 404 {
                         // 404 Not Found → file does not exist
