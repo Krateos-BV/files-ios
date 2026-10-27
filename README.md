@@ -20,7 +20,7 @@ This fork is not currently distributed via the App Store, TestFlight, or GitHub 
 
 ### Dependencies
 
-In order to build the project in Xcode you will also need a file `GoogleService-Info.plist` at the root of the repository which contains the Firebase configuration. For development work you can use a mock version found [here](https://github.com/firebase/quickstart-ios/blob/master/mock-GoogleService-Info.plist).
+All dependencies are Swift Packages declared in `Nextcloud.xcodeproj` and resolve automatically when the project is opened in Xcode. Xenia Files does not include the Firebase SDKs, so no `GoogleService-Info.plist` is needed.
 
 ## Upstream & license
 

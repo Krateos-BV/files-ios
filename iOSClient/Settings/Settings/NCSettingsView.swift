@@ -6,7 +6,6 @@
 import SwiftUI
 import Combine
 import NextcloudKit
-import FirebaseCrashlytics
 
 /// Settings view for Nextcloud
 @MainActor
@@ -261,7 +260,6 @@ struct NCSettingsView: View {
 #if DEBUG
             Section(header: Text("Debug").font(.headline), content: {
                 Button(action: {
-                    Crashlytics.crashlytics().log("Test crash triggered")
                     fatalError("🔥 Crash test")
                 }, label: {
                     HStack {

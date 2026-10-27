@@ -25,8 +25,6 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
     @Published var saveCameraMediaToCameraRoll: Bool = false
     // State variable for app integration.
     @Published var appIntegration: Bool = false
-    // State variable for enabling the crash reporter.
-    @Published var crashReporter: Bool = false
     // State variable for indicating whether the log file has been cleared.
     @Published var logFileCleared: Bool = false
     // Properties for log level and cache deletion
@@ -60,7 +58,6 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
         removeFromCameraRoll = keychain.removePhotoCameraRoll
         saveCameraMediaToCameraRoll = keychain.saveCameraMediaToCameraRoll
         appIntegration = keychain.disableFilesApp
-        crashReporter = keychain.disableCrashservice
         selectedLogLevel = keychain.log
         selectedInterval = CacheDeletionInterval(rawValue: keychain.cleanUpDay) ?? .never
     }
@@ -91,11 +88,6 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
     func updateAppIntegration() {
         NSFileProviderManager.removeAllDomains { _ in }
         keychain.disableFilesApp = appIntegration
-    }
-
-    /// Updates the value of `crashReporter` in the keychain.
-    func updateCrashReporter() {
-        keychain.disableCrashservice = crashReporter
     }
 
     /// Updates the value of `selectedLogLevel` in the keychain and sets it for NextcloudKit.
@@ -149,16 +141,6 @@ class NCSettingsAdvancedModel: ObservableObject, ViewOnAppearHandling {
     func resetNextCloud() {
         let appDelegate = (UIApplication.shared.delegate as? AppDelegate)!
         appDelegate.resetApplication()
-    }
-
-    /// Exits the Nextcloud application if specified.
-    ///
-    /// - Parameter
-    /// exit: Boolean indicating whether to exit the application.
-    func exitNextCloud(ext: Bool) {
-        if ext {
-            exit(0)
-        } else { }
     }
 
     /// Presents the log file viewer.

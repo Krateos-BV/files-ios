@@ -195,15 +195,6 @@ final class NCPreferences: NSObject {
         }
     }
 
-    var disableCrashservice: Bool {
-        get {
-            return getBoolPreference(key: "crashservice", defaultValue: false)
-        }
-        set {
-            setUserDefaults(newValue, forKey: "crashservice")
-        }
-    }
-
     /// Stores and retrieves the current log level from the keychain.
     var log: NKLogLevel {
         get {

@@ -96,13 +96,6 @@ final class NCBrandOptions: @unchecked Sendable {
     var disable_multiaccount: Bool = false
     var disable_more_external_site: Bool = false
     var disable_openin_file: Bool = false                                                       // Don't touch me !!
-    // XNT-256: GoogleService-Info.plist is the public Firebase quickstart mock, not a
-    // real XeniaCloud project -- a mock config stops our own Firebase console from
-    // showing anything, but doesn't stop FirebaseApp.configure() from making real
-    // outbound calls to Google's ingestion endpoints with bogus credentials. Default
-    // true keeps that call from ever firing, matching the original XNT-241 intent
-    // ("Firebase stays inert") that the `false` default silently contradicted.
-    var disable_crash_service: Bool = true
     var disable_log: Bool = false
     var disable_mobileconfig: Bool = false  
     var disable_show_more_nextcloud_apps_in_settings: Bool = true
@@ -148,9 +141,6 @@ final class NCBrandOptions: @unchecked Sendable {
             }
             if let str = configurationManaged[NCGlobal.shared.configuration_disable_multiaccount] as? String {
                 disable_multiaccount = (str as NSString).boolValue
-            }
-            if let str = configurationManaged[NCGlobal.shared.configuration_disable_crash_service] as? String {
-                disable_crash_service = (str as NSString).boolValue
             }
             if let str = configurationManaged[NCGlobal.shared.configuration_disable_log] as? String {
                 disable_log = (str as NSString).boolValue
