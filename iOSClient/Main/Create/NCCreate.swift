@@ -121,10 +121,14 @@ class NCCreate: NSObject {
             return
         }
 
+        // Xenia: do not open the /apps/files/directEditing/<token> URL returned by templates/new.
+        // richdocuments >= 11 hides its editor from iOS clients below version 34, and our CalVer
+        // user agent (26.x) fails that check, so the URL ends on "Page not found".
+        // An empty URL makes the viewer request a fresh one through api/v1/document instead (XEN-286).
         await openCreatedFile(
             serverUrlFileName: serverUrlFileName,
             editorId: NCGlobal.shared.editorCollabora,
-            editorURL: editorURL,
+            editorURL: "",
             session: session,
             controller: controller,
             viewController: viewController
