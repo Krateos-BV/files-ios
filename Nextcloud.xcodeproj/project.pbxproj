@@ -130,8 +130,6 @@
 		F3374AF82D78B01B002A38F9 /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = F3374AF72D78B01B002A38F9 /* HeapModule */; };
 		F33918C42C7CD8F2002D9AA1 /* FileNameValidator+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F33918C32C7CD8F2002D9AA1 /* FileNameValidator+Extensions.swift */; };
 		F33918C72C7CD8F2002D9AA1 /* FileNameValidator+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F33918C32C7CD8F2002D9AA1 /* FileNameValidator+Extensions.swift */; };
-		F3391B082B4C52C5001C0C4B /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = F3391B072B4C52C5001C0C4B /* FirebaseDatabase */; };
-		F3391B162B4C52F6001C0C4B /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = F3391B152B4C52F6001C0C4B /* FirebaseDatabase */; };
 		F33D303E2D8B129600531D64 /* AutoUploadUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F33D303D2D8B129600531D64 /* AutoUploadUITests.swift */; };
 		F33EE6E12BF4BDA500CA1A51 /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F33EE6E02BF4BDA500CA1A51 /* NIOSSL */; };
 		F33EE6E32BF4C00700CA1A51 /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F33EE6E22BF4C00700CA1A51 /* NIOSSL */; };
@@ -259,7 +257,6 @@
 		F708B452304EC5F9009D013A /* AlbumsRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F708B42B304EC5F9009D013A /* AlbumsRoutes.swift */; };
 		F708B453304EC5F9009D013A /* NCMediaViewRepresentable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F708B42D304EC5F9009D013A /* NCMediaViewRepresentable.swift */; };
 		F70968A424212C4E00ED60E5 /* NCLivePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70968A324212C4E00ED60E5 /* NCLivePhoto.swift */; };
-		F70B86752642CE3B00ED5349 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = F70B86742642CE3B00ED5349 /* FirebaseCrashlytics */; };
 		F70BFC7420E0FA7D00C67599 /* NCUtility.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70BFC7320E0FA7C00C67599 /* NCUtility.swift */; };
 		F70BFC7520E0FA7D00C67599 /* NCUtility.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70BFC7320E0FA7C00C67599 /* NCUtility.swift */; };
 		F70C8742301B1E5600170B1F /* NCCollectionViewCommon+CollectionViewDataSourcePrefetching.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70C8741301B1E5600170B1F /* NCCollectionViewCommon+CollectionViewDataSourcePrefetching.swift */; };
@@ -845,7 +842,6 @@
 		F7B769AB2B7A0B2000C1AAEB /* NCManageDatabase+Metadata+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B769A72B7A0B2000C1AAEB /* NCManageDatabase+Metadata+Session.swift */; };
 		F7B769AE2B7A0B2000C1AAEB /* NCManageDatabase+Metadata+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B769A72B7A0B2000C1AAEB /* NCManageDatabase+Metadata+Session.swift */; };
 		F7B82F182EBFA3B700F5F242 /* NCNetworking.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75A9EE523796C6F0044CFCE /* NCNetworking.swift */; };
-		F7B8B83025681C3400967775 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F7B8B82F25681C3400967775 /* GoogleService-Info.plist */; };
 		F7B934FE2BDCFE1E002B2FC9 /* NCDragDrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B934FD2BDCFE1E002B2FC9 /* NCDragDrop.swift */; };
 		F7BAADCB1ED5A87C00B7EAD4 /* NCManageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7BAADB51ED5A87C00B7EAD4 /* NCManageDatabase.swift */; };
 		F7BAADCC1ED5A87C00B7EAD4 /* NCManageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7BAADB51ED5A87C00B7EAD4 /* NCManageDatabase.swift */; };
@@ -1916,7 +1912,6 @@
 		F7B6B70327C4E7FA00A7F6EB /* NCScan+CollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NCScan+CollectionView.swift"; sourceTree = "<group>"; };
 		F7B7504A2397D38E004E13EC /* UIImage+Extension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "UIImage+Extension.swift"; sourceTree = "<group>"; };
 		F7B769A72B7A0B2000C1AAEB /* NCManageDatabase+Metadata+Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NCManageDatabase+Metadata+Session.swift"; sourceTree = "<group>"; };
-		F7B8B82F25681C3400967775 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = SOURCE_ROOT; };
 		F7B934FD2BDCFE1E002B2FC9 /* NCDragDrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCDragDrop.swift; sourceTree = "<group>"; };
 		F7BAADB51ED5A87C00B7EAD4 /* NCManageDatabase.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NCManageDatabase.swift; sourceTree = "<group>"; };
 		F7BB04851FD58ACB00BBFD2A /* cs-CZ */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "cs-CZ"; path = "cs-CZ.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -2147,7 +2142,6 @@
 				F37208C82BAB63F1006B5430 /* KeychainAccess in Frameworks */,
 				F37208A62BAB63EE006B5430 /* SwiftRichString in Frameworks */,
 				F37208C22BAB63F0006B5430 /* TagListView in Frameworks */,
-				F3391B162B4C52F6001C0C4B /* FirebaseDatabase in Frameworks */,
 				F37208B62BAB63EF006B5430 /* EasyTipView in Frameworks */,
 				F37208BA2BAB63EF006B5430 /* TLPhotoPicker in Frameworks */,
 				F37208AA2BAB63EE006B5430 /* MarkdownKit in Frameworks */,
@@ -2165,7 +2159,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F3F0419D2B9F7E6E00D5155F /* RealmSwift in Frameworks */,
-				F3391B082B4C52C5001C0C4B /* FirebaseDatabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2243,7 +2236,6 @@
 				F7160A822BE933390034DCB3 /* RealmSwift in Frameworks */,
 				F3374AF22D78B01B002A38F9 /* Collections in Frameworks */,
 				F72AD70D28C24B93006CB92D /* NextcloudKit in Frameworks */,
-				F70B86752642CE3B00ED5349 /* FirebaseCrashlytics in Frameworks */,
 				F7A1050E29E587AF00FFD92B /* TagListView in Frameworks */,
 				F76DA969277B77EA0082465B /* DropDown in Frameworks */,
 				F7F623B52A5EF4D30022D3D4 /* Gzip in Frameworks */,
@@ -3815,7 +3807,6 @@
 			isa = PBXGroup;
 			children = (
 				AA8E041E2D3114E200E7E89C /* README.md */,
-				F7B8B82F25681C3400967775 /* GoogleService-Info.plist */,
 				F7C1CDD91E6DFC6F005D92BE /* Brand */,
 				F7F67BAA1A24D27800EE80DA /* iOSClient */,
 				F7F67BAB1A24D27800EE80DA /* Supporting Files */,
@@ -4027,7 +4018,6 @@
 			);
 			name = NextcloudUITests;
 			packageProductDependencies = (
-				F3391B152B4C52F6001C0C4B /* FirebaseDatabase */,
 				F3F0419E2B9F7E7900D5155F /* RealmSwift */,
 				F37208A32BAB63EE006B5430 /* QRCodeReader */,
 				F37208A52BAB63EE006B5430 /* SwiftRichString */,
@@ -4063,7 +4053,6 @@
 			);
 			name = NextcloudIntegrationTests;
 			packageProductDependencies = (
-				F3391B072B4C52C5001C0C4B /* FirebaseDatabase */,
 				F3F0419C2B9F7E6E00D5155F /* RealmSwift */,
 			);
 			productName = NextcloudIntegrationTests;
@@ -4182,7 +4171,6 @@
 				AFBFD01327551A54002244BC /* ShellScript */,
 				F76DA934277B75710082465B /* Embed Frameworks */,
 				F721C7FE3040345700DD9D36 /* CopyFiles */,
-				F76995F02F99EF6C00291FA7 /* Crashlytics dSYM Upload */,
 			);
 			buildRules = (
 			);
@@ -4200,7 +4188,6 @@
 				F7ED547B25EEA65400956C55 /* QRCodeReader */,
 				F72DA9B325F53E4E00B87DB1 /* SwiftRichString */,
 				F788ECC6263AAAFA00ADC67F /* MarkdownKit */,
-				F70B86742642CE3B00ED5349 /* FirebaseCrashlytics */,
 				F76DA968277B77EA0082465B /* DropDown */,
 				F753BA92281FD8020015BFB6 /* EasyTipView */,
 				F72AD70C28C24B93006CB92D /* NextcloudKit */,
@@ -4428,7 +4415,6 @@
 				F7ED547A25EEA65400956C55 /* XCRemoteSwiftPackageReference "QRCodeReader" */,
 				F72DA9B225F53E4E00B87DB1 /* XCRemoteSwiftPackageReference "SwiftRichString" */,
 				F788ECC5263AAAF900ADC67F /* XCRemoteSwiftPackageReference "MarkdownKit" */,
-				F70B86732642CE3B00ED5349 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				F76DA967277B77E90082465B /* XCRemoteSwiftPackageReference "DropDown" */,
 				F710FC78277B7CFF00AA9FBF /* XCRemoteSwiftPackageReference "realm-swift" */,
 				F753BA91281FD8010015BFB6 /* XCRemoteSwiftPackageReference "EasyTipView" */,
@@ -4583,7 +4569,6 @@
 				F75D901F2D2BE12E003E740B /* NCRecommendationsCell.xib in Resources */,
 				F7A48415297028FC00BD1B49 /* Nextcloud Hub.png in Resources */,
 				F74C0437253F1CDC009762AB /* NCShares.storyboard in Resources */,
-				F7B8B83025681C3400967775 /* GoogleService-Info.plist in Resources */,
 				F7381EE5218218C9000B1560 /* NCOffline.storyboard in Resources */,
 				F768822D2C0DD1E7001CF441 /* Acknowledgements.rtf in Resources */,
 				F76D3CF32428B94E005DFA87 /* NCViewerPDFSearchCell.xib in Resources */,
@@ -4671,29 +4656,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if test -d \"/opt/homebrew/bin/\"; then\n  PATH=\"/opt/homebrew/bin/:${PATH}\"\nfi\n\nexport PATH\n\nif which swiftlint >/dev/null; then\n  swiftlint\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
-		};
-		F76995F02F99EF6C00291FA7 /* Crashlytics dSYM Upload */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
-				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}",
-				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist",
-				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
-			);
-			name = "Crashlytics dSYM Upload";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -7093,14 +7055,6 @@
 				version = 0.7.1;
 			};
 		};
-		F70B86732642CE3B00ED5349 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 12.17.0;
-			};
-		};
 		F710FC78277B7CFF00AA9FBF /* XCRemoteSwiftPackageReference "realm-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/realm/realm-swift";
@@ -7249,16 +7203,6 @@
 			package = F3374AEE2D78B01B002A38F9 /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = HeapModule;
 		};
-		F3391B072B4C52C5001C0C4B /* FirebaseDatabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F70B86732642CE3B00ED5349 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseDatabase;
-		};
-		F3391B152B4C52F6001C0C4B /* FirebaseDatabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F70B86732642CE3B00ED5349 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseDatabase;
-		};
 		F33EE6E02BF4BDA500CA1A51 /* NIOSSL */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F33EE6DF2BF4BDA500CA1A51 /* XCRemoteSwiftPackageReference "swift-nio-ssl" */;
@@ -7388,11 +7332,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F7A1050C29E587AF00FFD92B /* XCRemoteSwiftPackageReference "TagListView" */;
 			productName = TagListView;
-		};
-		F70B86742642CE3B00ED5349 /* FirebaseCrashlytics */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F70B86732642CE3B00ED5349 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCrashlytics;
 		};
 		F70CAC7C30408F2600CCCB7F /* NextcloudKit */ = {
 			isa = XCSwiftPackageProductDependency;

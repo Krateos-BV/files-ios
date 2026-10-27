@@ -17,7 +17,7 @@
 The Nextcloud iOS Client is a tool to access and synchronize files from Nextcloud Server on your iPhone or iPad.
 Swift, UIKit and SwiftUI are the key technologies used for building the app on iOS.
 Server communication is handled by the NextcloudKit library — a separate repository (https://github.com/nextcloud/NextcloudKit) consumed as a Swift Package pinned to an exact version in `Nextcloud.xcodeproj`. Prefer its APIs over hand-rolled networking code; server API changes belong in that repo.
-Other key dependencies (all Swift Packages): Realm (local database), Alamofire (HTTP), Firebase (crash reporting), OpenSSL (end-to-end encryption), VLCKit (media playback). Prefer existing dependencies over adding new ones.
+Other key dependencies (all Swift Packages): Realm (local database), Alamofire (HTTP), OpenSSL (end-to-end encryption), VLCKit (media playback). Prefer existing dependencies over adding new ones.
 Other platforms like Android are irrelevant for this project.
 
 ## Project Structure: AI Agent Handling Guidelines
@@ -73,7 +73,7 @@ The following details are important when working on the iOS client.
 ### Requirements
 
 - Use at least the Xcode version pinned in `.github/workflows/xcode.yml` — that is what CI builds and tests with.
-- A `GoogleService-Info.plist` must exist at the repo root to build; CI downloads Firebase's mock plist (see `xcode.yml`).
+- Firebase is intentionally not a dependency (XEN-289); do not re-add it when merging upstream.
 
 ### Code Style
 

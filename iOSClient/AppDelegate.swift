@@ -7,7 +7,6 @@ import UIKit
 import BackgroundTasks
 import NextcloudKit
 import LocalAuthentication
-import Firebase
 import WidgetKit
 import EasyTipView
 import SwiftUI
@@ -50,10 +49,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         NCSettingsBundleHelper.checkAndExecuteSettings(delay: 0)
 
         UserDefaults.standard.register(defaults: ["UserAgent": userAgent])
-
-        if !NCPreferences().disableCrashservice, !NCBrandOptions.shared.disable_crash_service {
-            FirebaseApp.configure()
-        }
 
         NCBrandColor.shared.createUserColors()
 

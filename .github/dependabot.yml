@@ -4,7 +4,7 @@
 
 version: 2
 updates:
-  # SPM packages declared in Nextcloud.xcodeproj (NextcloudKit, Realm, Firebase, …)
+  # SPM packages declared in Nextcloud.xcodeproj (NextcloudKit, Realm, …)
   - package-ecosystem: "swift"
     directory: "/"
     schedule:

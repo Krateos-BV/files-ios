@@ -13,8 +13,6 @@ struct NCSettingsAdvancedView: View {
     @State var showExitAlert: Bool = false
     // State variable for indicating whether the cache alert is shown.
     @State var showCacheAlert: Bool = false
-    // State variable for indicating whether to disable crash reporter.
-    @State var showCrashReporter: Bool = false
 
     var body: some View {
         Form {
@@ -91,32 +89,6 @@ struct NCSettingsAdvancedView: View {
                     }
                 }, footer: {
                     Text(NSLocalizedString("_disable_files_app_footer_", comment: ""))
-                        .font(.footnote)
-                })
-            }
-            // Section: Privacy
-            if !NCBrandOptions.shared.disable_crash_service {
-                Section(content: {
-                    Toggle(NSLocalizedString("_crashservice_title_", comment: ""), isOn: $model.crashReporter)
-                        .font(.body)
-                        .tint(Color(NCBrandColor.shared.getElement(account: model.session.account)))
-                        .onChange(of: model.crashReporter) {
-                            model.updateCrashReporter()
-                            showCrashReporter.toggle()
-                    }
-                    .alert(NSLocalizedString("_crashservice_title_", comment: ""), isPresented: $showCrashReporter, actions: {
-                        Button(NSLocalizedString("OK", comment: ""), role: .cancel) {
-                            model.exitNextCloud(ext: showCrashReporter)
-                        }
-                    }, message: {
-                        Text(NSLocalizedString("_crashservice_alert_", comment: ""))
-                            .font(.body)
-                    })
-                }, header: {
-                    Text(NSLocalizedString("_privacy_", comment: ""))
-                        .font(.headline)
-                }, footer: {
-                    Text(NSLocalizedString("_privacy_footer_", comment: ""))
                         .font(.footnote)
                 })
             }
