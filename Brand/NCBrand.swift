@@ -164,6 +164,20 @@ final class NCBrandOptions: @unchecked Sendable {
             // DEBUG SERVER PUSH
             // pushNotificationServerProxy = "https://c0004.customerpush.nextcloud.com"
         }
+
+        // The upstream UI tests (BaseUIXCTestCase.logIn) tap the intro "login" button and type
+        // TestConstants.server into the server field to reach the Nextcloud container CI starts.
+        // Our single-tenant lock skips the intro and disables that field, so every UI test died
+        // at login (XEN-293; same call as talk-ios XEN-202). Restore upstream's login flow only
+        // for UI_TESTING launches, and only under #if DEBUG: the Test action builds Debug and
+        // Archive builds Release, so no shipped binary contains this escape hatch.
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
+            loginBaseUrl = ""
+            disable_intro = false
+            disable_request_login_url = false
+        }
+        #endif
     }
 
     @objc func getUserAgent() -> String {
