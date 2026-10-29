@@ -16,6 +16,27 @@ class NCMediaNavigationController: NCMainNavigationController {
         NotificationCenter.default.addObserver(self, selector: #selector(handlePhotosAddedToAlbumNotification(_:)), name: Self.photosAddedToAlbumNotification, object: nil)
     }
 
+    override func configureSidebarButton() {
+        guard let media = topViewController as? NCMedia else {
+            super.configureSidebarButton()
+            return
+        }
+        super.configureSidebarButton()
+
+        // Rebuild from Media's state, not UIKit's derived leftBarButtonItems.
+        // Moving items into groups can change that getter during Select/Cancel.
+        var items: [UIBarButtonItem] = [media.buttonDateBarItem]
+        if media === viewControllers.first, controller != nil, !media.isEditMode {
+            items.insert(sidebarButtonItem, at: 0)
+        }
+        if media.searchActivityIndicator.isAnimating {
+            items.append(media.searchActivityBarButtonItem)
+        }
+        media.navigationItem.leadingItemGroups = items.map { item in
+            UIBarButtonItemGroup(barButtonItems: [item], representativeItem: nil)
+        }
+    }
+
     override func setNavigationRightItems() async {
         guard let media = topViewController as? NCMedia else {
             return
@@ -23,39 +44,14 @@ class NCMediaNavigationController: NCMainNavigationController {
 
         if media.isEditMode {
             media.tabBarSelect.show()
-            await collectionViewCommonTrailingItemGroups()
         } else {
             media.tabBarSelect.hide()
-            await mediaTrailingItemGroups()
-            await collectionViewCommonTrailingItemGroups()
         }
-    }
-
-    private func mediaTrailingItemGroups() async {
-        let capabilities = await NKCapabilities.shared.getCapabilities(for: session.account)
-        var desiredItems: [UIBarButtonItem] = []
-
-        if controller?.availableNotifications ?? false {
-            desiredItems.append(notificationsButtonItem)
-        }
-
-        if capabilities.assistantEnabled {
-            desiredItems.append(assistantButtonItem)
-        }
-
-        desiredItems.append(transfersButtonItem)
-
-        if let optionMenu = await self.createOptionMenu() {
-            setOptionMenu(optionMenu)
-            desiredItems.append(optionButtonItem)
-        }
-
-        let group = UIBarButtonItemGroup(
-            barButtonItems: desiredItems,
-            representativeItem: nil
-        )
-
-        topViewController?.navigationItem.trailingItemGroups = [group]
+        let menu = await createOptionMenu()
+        guard topViewController === media else { return }
+        setOptionMenu(menu, for: media.navigationItem)
+        media.navigationItem.trailingItemGroups = []
+        configureSidebarButton()
     }
 
     override func createOptionMenu() async -> UIMenu? {
@@ -90,8 +86,9 @@ class NCMediaNavigationController: NCMainNavigationController {
                         media.showOnlyImages = true
                         media.showOnlyVideos = false
                         Task {
-                            await media.loadDataSource()
                             await media.networkRemoveAll()
+                            await media.loadDataSource()
+                            media.searchNewMedia()
                         }
                     },
 
@@ -99,8 +96,9 @@ class NCMediaNavigationController: NCMainNavigationController {
                         media.showOnlyImages = false
                         media.showOnlyVideos = true
                         Task {
-                            await media.loadDataSource()
                             await media.networkRemoveAll()
+                            await media.loadDataSource()
+                            media.searchNewMedia()
                         }
                     },
 
@@ -108,8 +106,9 @@ class NCMediaNavigationController: NCMainNavigationController {
                         media.showOnlyImages = false
                         media.showOnlyVideos = false
                         Task {
-                            await media.loadDataSource()
                             await media.networkRemoveAll()
+                            await media.loadDataSource()
+                            media.searchNewMedia()
                         }
                     }
                 ]
@@ -372,16 +371,17 @@ class NCMediaNavigationController: NCMainNavigationController {
     private static func showAlbumAndNotify(_ album: Album, controller: NCMainTabBarController) {
         DispatchQueue.main.async {
             guard controller.viewIfLoaded?.window != nil,
-                  let navigationController = controller.viewControllers?.compactMap({ $0 as? NCMoreNavigationController }).first,
+                  album.account == controller.account,
+                  let navigationController = controller.viewControllers?.compactMap({ $0 as? NCAlbumsNavigationController }).first,
+                  let albumsListController = navigationController.viewControllers.first,
                   let albumsController = UIStoryboard(name: "NCAlbums", bundle: nil)
                     .instantiateInitialViewController() as? AlbumsViewController else {
                 return
             }
 
             albumsController.initialAlbum = album
+            navigationController.setViewControllers([albumsListController, albumsController], animated: false)
             controller.selectedViewController = navigationController
-            guard let moreController = navigationController.viewControllers.first else { return }
-            navigationController.setViewControllers([moreController, albumsController], animated: true)
             NotificationCenter.default.post(name: photosAddedToAlbumNotification, object: controller)
         }
     }

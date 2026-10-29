@@ -53,6 +53,8 @@ class NCShareExtension: UIViewController {
     var banner: LucidBanner?
     var sceneIdentifier: String = UUID().uuidString
     private var isPresentingNoAccountAlert = false
+    private var isPresentingPasscode = false
+    private var isPasscodeAuthenticated = false
 
     // MARK: - View Life Cycle
 
@@ -88,7 +90,10 @@ class NCShareExtension: UIViewController {
         uploadView.addGestureRecognizer(uploadGesture)
 
         let versionNextcloudiOS = String(format: NCBrandOptions.shared.textCopyrightNextcloudiOS, utility.getVersionBuild())
-        NextcloudKit.configureLogger(logLevel: (NCBrandOptions.shared.disable_log ? .disabled : NCPreferences().log))
+        NextcloudKit.configureLogger(
+            logLevel: NCBrandOptions.shared.disable_log ? .disabled : NCPreferences().log,
+            logDirectory: NCPreferences.sharedLogDirectory
+        )
 
         nkLog(start: "Start Share session " + versionNextcloudiOS)
 
@@ -107,11 +112,8 @@ class NCShareExtension: UIViewController {
                 return
             }
 
-            if NCPreferences().presentPasscode {
-                NCPasscode.shared.presentPasscode(viewController: self, delegate: self) {
-                    NCPasscode.shared.enableTouchFaceID()
-                }
-            }
+            self.isPasscodeAuthenticated = false
+            self.requestPasscodeIfNeeded()
         }
 
         // Verify version
@@ -162,11 +164,7 @@ class NCShareExtension: UIViewController {
                 }
             }
 
-            if NCPreferences().presentPasscode {
-                NCPasscode.shared.presentPasscode(viewController: self, delegate: self) {
-                    NCPasscode.shared.enableTouchFaceID()
-                }
-            }
+            self.requestPasscodeIfNeeded()
 
             self.collectionView.reloadData()
         }
@@ -186,7 +184,7 @@ class NCShareExtension: UIViewController {
     }
 
     private func validateAccount() -> Bool {
-        guard !NCPasscode.shared.isPasscodeReset else {
+        guard !NCPasscodeModel.isPasscodeReset else {
             return showNoAccountAlert()
         }
 
@@ -495,12 +493,8 @@ extension NCShareExtension {
         metadata.serverUrlFileName = utilityFileSystem.createServerUrl(serverUrl: metadata.serverUrl, fileName: metadata.fileName)
 
         // CHUNK
-        var chunkSize = NCGlobal.shared.chunkSizeMBCellular
-        if NCNetworking.shared.networkReachability == NKTypeReachability.reachableEthernetOrWiFi {
-            chunkSize = NCGlobal.shared.chunkSizeMBEthernetOrWiFi
-        }
-        if metadata.size > chunkSize {
-            metadata.chunk = chunkSize
+        if metadata.size > self.global.chunkSize {
+            metadata.chunk = self.global.chunkSize
         } else {
             metadata.chunk = 0
         }
@@ -576,18 +570,22 @@ extension NCShareExtension {
     }
 }
 
-extension NCShareExtension: NCPasscodeDelegate {
-    func passcodeReset(_ passcodeViewController: TOPasscodeViewController) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            passcodeViewController.dismiss(animated: false)
-            self.cancel(with: .noAccount)
-        }
-    }
-
-    func evaluatePolicy(_ passcodeViewController: TOPasscodeViewController, isCorrectCode: Bool) {
-        if !isCorrectCode {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                passcodeViewController.dismiss(animated: false)
+extension NCShareExtension {
+    /// Require authentication once per foreground session without reopening after dismissal.
+    private func requestPasscodeIfNeeded() {
+        guard NCPreferences().presentPasscode,
+              !isPasscodeAuthenticated,
+              !isPresentingPasscode else { return }
+        isPresentingPasscode = true
+        // Embed in the content controller; the helper hides the outer navigation bar.
+        NCPasscodeView.embed(in: self) { [weak self] result in
+            guard let self else { return }
+            self.isPresentingPasscode = false
+            switch result {
+            case .authenticated:
+                self.isPasscodeAuthenticated = true
+                _ = self.validateAccount()
+            case .cancelled, .reset, .configured, .disabled:
                 self.cancel(with: .noAccount)
             }
         }

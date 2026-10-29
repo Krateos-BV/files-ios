@@ -41,6 +41,7 @@ struct NCAcknowledgementsView: View {
                             .foregroundColor(Color(NCBrandColor.shared.iconImageColor))
                     }
                 }
+                .accessibilityIdentifier("settings.acknowledgements.close")
                 .padding()
             }
             Divider()
@@ -52,6 +53,7 @@ struct NCAcknowledgementsView: View {
                 }
             }
         }
+        .hideTopScrollEdgeEffect()
         .navigationBarTitle(Text(NSLocalizedString("_autoupload_description_", comment: "")), displayMode: .inline)
         .onAppear {
             loadRTF()
