@@ -290,6 +290,8 @@ class NCLogin: UIViewController, UITextFieldDelegate, NCLoginQRCodeDelegate {
     }
 
     @IBAction func actionButtonLogin(_ sender: Any) {
+        // Match the Return key path: dismiss the keyboard while the server is probed.
+        view.endEditing(true)
         NCNetworking.shared.p12Data = nil
         NCNetworking.shared.p12Password = nil
         login()

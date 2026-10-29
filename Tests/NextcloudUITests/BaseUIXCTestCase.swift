@@ -141,7 +141,8 @@ class BaseUIXCTestCase: XCTestCase {
                     return true
                 }
             }
-            try await Task.sleep(for: .milliseconds(250))
+            // Each query snapshots the app on its main thread; polling faster starves the login flow (XEN-293).
+            try await Task.sleep(for: .seconds(1))
         } while Date() < deadline
         return false
     }
@@ -169,7 +170,8 @@ class BaseUIXCTestCase: XCTestCase {
                     return webView
                 }
             }
-            try await Task.sleep(for: .milliseconds(250))
+            // Each query snapshots the app on its main thread; polling faster starves the login flow (XEN-293).
+            try await Task.sleep(for: .seconds(1))
         } while Date() < deadline
 
         attachAuthenticationDiagnostics()
