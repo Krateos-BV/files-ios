@@ -688,19 +688,13 @@ final class NCPreferences: NSObject {
     // MARK: - Background Upload Extension
 
     /// Reports whether this installation may expose the experimental background upload setting.
-    /// Debug builds are always eligible; release builds are eligible only with a TestFlight receipt.
+    /// Xenia: Debug builds only. Upstream also enables it for sandbox (TestFlight) receipts, but App Review
+    /// devices carry sandbox receipts too, so release builds would show reviewers an orange "TEST" toggle.
     static var canConfigureBackgroundUploadExtension: Bool {
 #if DEBUG
         return true
 #else
-        let bundles = [
-            Bundle.main,
-            Bundle(url: Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent())
-        ]
-
-        return bundles.contains {
-            $0?.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        }
+        return false
 #endif
     }
 
