@@ -92,20 +92,14 @@ class NCNetworkingE2EE: NSObject {
     /// subsequent E2EE access will perform one new server validation.
     static func beginNewServerKeyValidationCycle() async {
         await serverKeyValidationGate.beginNewActiveCycle()
-        nkLog(
-            tag: NCGlobal.shared.logTagE2EE,
-            message: "Started a new server-key validation cycle."
-        )
+        nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Started a new server-key validation cycle.")
     }
 
     /// Records a key set that was already fetched and cryptographically
     /// verified by setup, avoiding a redundant request in the same cycle.
     static func markServerKeyAsValidated(account: String) async {
         await serverKeyValidationGate.markValidated(account: account)
-        nkLog(
-            tag: NCGlobal.shared.logTagE2EE,
-            message: "Server key marked as validated by E2EE setup."
-        )
+        nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server key marked as validated by E2EE setup.")
     }
 
     /// Verifies once per active app cycle that the locally active user key is
@@ -118,35 +112,20 @@ class NCNetworkingE2EE: NSObject {
               !localCertificate.isEmpty,
               let serverPublicKey = preferences.getEndToEndPublicKey(account: account),
               !serverPublicKey.isEmpty else {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Server-key validation skipped because the active key set is incomplete."
-            )
-            return NKError(
-                errorCode: NCGlobal.shared.errorE2EENotEnabled,
-                errorDescription: NSLocalizedString("_e2ee_no_metadataKey_found_", comment: "")
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server-key validation skipped because the active key set is incomplete.")
+            return NKError(errorCode: NCGlobal.shared.errorE2EENotEnabled, errorDescription: NSLocalizedString("_e2ee_no_metadataKey_found_", comment: ""))
         }
 
         if preferences.isEndToEndServerKeyStale(account: account) {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Server-key validation blocked because the active key set is stale."
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server-key validation blocked because the active key set is stale.")
             return Self.serverKeyChangedError
         }
 
         return await Self.serverKeyValidationGate.validate(
             account: account
         ) {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Validating the active user key against the server."
-            )
-            return await Self.performServerKeyValidation(
-                account: account,
-                localCertificate: localCertificate,
-                serverPublicKey: serverPublicKey
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Validating the active user key against the server.")
+            return await Self.performServerKeyValidation(account: account, localCertificate: localCertificate, serverPublicKey: serverPublicKey
             )
         }
     }
@@ -165,22 +144,13 @@ class NCNetworkingE2EE: NSObject {
         )
 
         if result.error.errorCode == NCGlobal.shared.errorResourceNotFound {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "The server user certificate is missing."
-            )
-            return markCurrentServerKeyAsStale(
-                account: account,
-                expectedCertificate: localCertificate,
-                preferences: preferences
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "The server user certificate is missing.")
+            return markCurrentServerKeyAsStale(account: account, expectedCertificate: localCertificate, preferences: preferences
             )
         }
 
         guard result.error == .success else {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Server-key validation request failed with error code \(result.error.errorCode)."
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server-key validation request failed with error code \(result.error.errorCode).")
             return result.error
         }
 
@@ -188,18 +158,12 @@ class NCNetworkingE2EE: NSObject {
               let endToEndEncryption = NCEndToEndEncryption.shared(),
               let localUserPublicKey = endToEndEncryption.extractPublicKey(fromCertificate: localCertificate),
               let remoteUserPublicKey = endToEndEncryption.extractPublicKey(fromCertificate: remoteCertificate) else {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Server-key validation received invalid certificate data."
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server-key validation received invalid certificate data.")
             return .invalidData
         }
 
         guard endToEndEncryption.verifyCertificate(remoteCertificate, publicKey: serverPublicKey) else {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Server-key validation detected an invalid remote certificate."
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server-key validation detected an invalid remote certificate.")
             return markCurrentServerKeyAsStale(
                 account: account,
                 expectedCertificate: localCertificate,
@@ -208,22 +172,12 @@ class NCNetworkingE2EE: NSObject {
         }
 
         guard networkingE2EE.publicKeysMatch(localUserPublicKey, remoteUserPublicKey) else {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Server-key validation detected a changed user key."
-            )
-            return markCurrentServerKeyAsStale(
-                account: account,
-                expectedCertificate: localCertificate,
-                preferences: preferences
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Server-key validation detected a changed user key.")
+            return markCurrentServerKeyAsStale(account: account, expectedCertificate: localCertificate, preferences: preferences)
         }
 
         preferences.setEndToEndServerKeyStale(account: account, stale: false)
-        nkLog(
-            tag: NCGlobal.shared.logTagE2EE,
-            message: "The active user key matches the server."
-        )
+        nkLog(tag: NCGlobal.shared.logTagE2EE, message: "The active user key matches the server.")
         return .success
     }
 
@@ -250,38 +204,23 @@ class NCNetworkingE2EE: NSObject {
         // Setup may have replaced the active set while this request was in
         // flight. An obsolete response must never mark the new set as stale.
         guard preferences.getEndToEndCertificate(account: account) == expectedCertificate else {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Ignored an obsolete server-key validation response."
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Ignored an obsolete server-key validation response.")
             return .success
         }
 
         do {
             try preferences.archiveCurrentEndToEndKeySet(account: account)
             preferences.setEndToEndServerKeyStale(account: account, stale: true)
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Archived the active key set and marked it as stale."
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Archived the active key set and marked it as stale.")
             return serverKeyChangedError
         } catch {
-            nkLog(
-                tag: NCGlobal.shared.logTagE2EE,
-                message: "Unable to archive the active key set after server-key validation."
-            )
-            return NKError(
-                errorCode: NCGlobal.shared.errorInternalError,
-                errorDescription: error.localizedDescription
-            )
+            nkLog(tag: NCGlobal.shared.logTagE2EE, message: "Unable to archive the active key set after server-key validation.")
+            return NKError(errorCode: NCGlobal.shared.errorInternalError, errorDescription: error.localizedDescription)
         }
     }
 
     private static var serverKeyChangedError: NKError {
-        NKError(
-            errorCode: NCGlobal.shared.errorE2EEServerKeyChanged,
-            errorDescription: NSLocalizedString("_e2ee_server_key_changed_", comment: "")
-        )
+        NKError(errorCode: NCGlobal.shared.errorE2EEServerKeyChanged, errorDescription: NSLocalizedString("_e2ee_server_key_changed_", comment: ""))
     }
 
     // MARK: -
@@ -297,49 +236,21 @@ class NCNetworkingE2EE: NSObject {
         switch capabilities.e2EEApiVersion {
         case let v where v.hasPrefix("1."):
             let options = NKRequestOptions(version: e2EEApiVersion1)
-            let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options) { task in
-                Task {
-                    let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                                path: fileId,
-                                                                                                name: "getE2EEMetadata")
-                    await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                }
-            }
+            let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options)
             return (results.account, self.e2EEApiVersion1, results.e2eMetadata, results.signature, results.responseData, results.error)
         case let v where v.hasPrefix("2."):
             var options = NKRequestOptions(version: e2EEApiVersion2)
-            let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options) { task in
-                Task {
-                    let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                                path: fileId,
-                                                                                                name: "getE2EEMetadata")
-                    await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                }
-            }
+            let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options)
             if results.error == .success || results.error.errorCode == NCGlobal.shared.errorResourceNotFound {
                 return (results.account, self.e2EEApiVersion2, results.e2eMetadata, results.signature, results.responseData, results.error)
             } else {
                 options = NKRequestOptions(version: self.e2EEApiVersion1)
-                let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options) { task in
-                    Task {
-                        let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                                    path: fileId,
-                                                                                                    name: "getE2EEMetadata")
-                        await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                    }
-                }
+                let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options)
                 if results.error == .success || results.error.errorCode == NCGlobal.shared.errorResourceNotFound {
                     return (results.account, self.e2EEApiVersion2, results.e2eMetadata, results.signature, results.responseData, results.error)
                 } else {
                     options = NKRequestOptions(version: self.e2EEApiVersion1)
-                    let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options) { task in
-                        Task {
-                            let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                                        path: fileId,
-                                                                                                        name: "getE2EEMetadata")
-                            await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                        }
-                    }
+                    let results = await NextcloudKit.shared.getE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, account: account, options: options)
                     return (results.account, self.e2EEApiVersion1, results.e2eMetadata, results.signature, results.responseData, results.error)
                 }
             }
@@ -404,19 +315,12 @@ class NCNetworkingE2EE: NSObject {
         let session = NCSession.shared.getSession(account: account)
         let capabilities = await NKCapabilities.shared.getCapabilities(for: account)
         guard let directory = self.database.getTableDirectory(predicate: NSPredicate(format: "account == %@ AND serverUrl == %@", session.account, serverUrl)) else {
-            return NKError(errorCode: NCGlobal.shared.errorUnexpectedResponseFromDB,
-                           errorDescription: NSLocalizedString("_e2ee_no_dir_", comment: ""))
+            return NKError(errorCode: NCGlobal.shared.errorUnexpectedResponseFromDB, errorDescription: NSLocalizedString("_e2ee_no_dir_", comment: ""))
         }
 
         if let addUserId {
-            let results = await NextcloudKit.shared.getE2EECertificateAsync(user: addUserId, account: session.account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities)) {task in
-                Task {
-                    let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                                path: addUserId,
-                                                                                                name: "getE2EECertificate")
-                    await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                }
-            }
+            let results = await NextcloudKit.shared.getE2EECertificateAsync(user: addUserId, account: session.account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities))
+
             if results.error == .success, let certificateUser = results.certificateUser {
                 addCertificate = certificateUser
             } else {
@@ -457,10 +361,7 @@ class NCNetworkingE2EE: NSObject {
                     )
                 } catch {
                     await unlock(account: session.account, serverUrl: serverUrl)
-                    return NKError(
-                        errorCode: NCGlobal.shared.errorInternalError,
-                        errorDescription: error.localizedDescription
-                    )
+                    return NKError(errorCode: NCGlobal.shared.errorInternalError, errorDescription: error.localizedDescription)
                 }
 
                 guard storedAccess.writeAccessError == .success else {
@@ -546,17 +447,11 @@ class NCNetworkingE2EE: NSObject {
                 session: session
             )
         } catch {
-            return NKError(
-                errorCode: NCGlobal.shared.errorInternalError,
-                errorDescription: error.localizedDescription
-            )
+            return NKError(errorCode: NCGlobal.shared.errorInternalError, errorDescription: error.localizedDescription)
         }
 
         let writeAccessError = access.writeAccessError
-        nkLog(
-            tag: NCGlobal.shared.logTagE2EE,
-            message: "E2EE write access \(writeAccessError == .success ? "granted" : "denied") using the \(access.diagnosticDescription) key set."
-        )
+        nkLog(tag: NCGlobal.shared.logTagE2EE, message: "E2EE write access \(writeAccessError == .success ? "granted" : "denied") using the \(access.diagnosticDescription) key set.")
         return writeAccessError
     }
 
@@ -578,14 +473,8 @@ class NCNetworkingE2EE: NSObject {
         }
         let capabilities = await NKCapabilities.shared.getCapabilities(for: session.account)
 
-        let putE2EEMetadataResults = await NextcloudKit.shared.putE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, e2eMetadata: e2eMetadata, signature: resultsEncodeMetadata.signature, method: method, account: session.account, options: NCNetworkingE2EE().getOptions(account: session.account, capabilities: capabilities)) { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: session.account,
-                                                                                            path: fileId,
-                                                                                            name: "putE2EEMetadata")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
-        }
+        let putE2EEMetadataResults = await NextcloudKit.shared.putE2EEMetadataAsync(fileId: fileId, e2eToken: e2eToken, e2eMetadata: e2eMetadata, signature: resultsEncodeMetadata.signature, method: method, account: session.account, options: NCNetworkingE2EE().getOptions(account: session.account, capabilities: capabilities))
+
         guard putE2EEMetadataResults.error == .success else {
             return putE2EEMetadataResults.error
         }
@@ -616,10 +505,7 @@ class NCNetworkingE2EE: NSObject {
                         return storedAccess.writeAccessError
                     }
                 } catch {
-                    return NKError(
-                        errorCode: NCGlobal.shared.errorInternalError,
-                        errorDescription: error.localizedDescription
-                    )
+                    return NKError(errorCode: NCGlobal.shared.errorInternalError, errorDescription: error.localizedDescription)
                 }
             }
             return resultsGetE2EEMetadata.error
@@ -642,8 +528,7 @@ class NCNetworkingE2EE: NSObject {
         var e2eToken: String?
         var e2eCounter = "1"
         guard let directory = self.database.getTableDirectory(predicate: NSPredicate(format: "account == %@ AND serverUrl == %@", account, serverUrl)) else {
-            return (nil, nil, NKError(errorCode: NCGlobal.shared.errorUnexpectedResponseFromDB,
-                                      errorDescription: NSLocalizedString("_e2ee_no_dir_", comment: "")))
+            return (nil, nil, NKError(errorCode: NCGlobal.shared.errorUnexpectedResponseFromDB, errorDescription: NSLocalizedString("_e2ee_no_dir_", comment: "")))
         }
         let capabilities = await NKCapabilities.shared.getCapabilities(for: account)
 
@@ -656,14 +541,8 @@ class NCNetworkingE2EE: NSObject {
             e2eCounter = "\(counter)"
         }
 
-        let resultsLockE2EEFolder = await NextcloudKit.shared.lockE2EEFolderAsync(fileId: directory.fileId, e2eToken: e2eToken, e2eCounter: e2eCounter, method: "POST", account: account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities)) { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                            path: directory.fileId,
-                                                                                            name: "lockE2EEFolder")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
-        }
+        let resultsLockE2EEFolder = await NextcloudKit.shared.lockE2EEFolderAsync(fileId: directory.fileId, e2eToken: e2eToken, e2eCounter: e2eCounter, method: "POST", account: account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities))
+
         if resultsLockE2EEFolder.error == .success, let e2eToken = resultsLockE2EEFolder.e2eToken {
             await self.database.setE2ETokenLockAsync(account: account, serverUrl: serverUrl, fileId: directory.fileId, e2eToken: e2eToken)
         }
@@ -676,14 +555,8 @@ class NCNetworkingE2EE: NSObject {
             return
         }
         let capabilities = await NKCapabilities.shared.getCapabilities(for: account)
-        let resultsLockE2EEFolder = await NextcloudKit.shared.lockE2EEFolderAsync(fileId: tableLock.fileId, e2eToken: tableLock.e2eToken, e2eCounter: nil, method: "DELETE", account: account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities)) { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                            path: tableLock.fileId,
-                                                                                            name: "lockE2EEFolder")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
-        }
+        let resultsLockE2EEFolder = await NextcloudKit.shared.lockE2EEFolderAsync(fileId: tableLock.fileId, e2eToken: tableLock.e2eToken, e2eCounter: nil, method: "DELETE", account: account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities))
+
         if resultsLockE2EEFolder.error == .success {
             await self.database.deleteE2ETokenLockAsync(account: account, serverUrl: serverUrl)
         }
@@ -696,14 +569,8 @@ class NCNetworkingE2EE: NSObject {
         let capabilities = await NKCapabilities.shared.getCapabilities(for: account)
         let results = await self.database.getE2EAllTokenLockAsync(account: account)
         for result in results {
-            let resultsLockE2EEFolder = await NextcloudKit.shared.lockE2EEFolderAsync(fileId: result.fileId, e2eToken: result.e2eToken, e2eCounter: nil, method: "DELETE", account: account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities)) { task in
-                Task {
-                    let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                                path: result.fileId,
-                                                                                                name: "lockE2EEFolder")
-                    await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                }
-            }
+            let resultsLockE2EEFolder = await NextcloudKit.shared.lockE2EEFolderAsync(fileId: result.fileId, e2eToken: result.e2eToken, e2eCounter: nil, method: "DELETE", account: account, options: NCNetworkingE2EE().getOptions(account: account, capabilities: capabilities))
+
             if resultsLockE2EEFolder.error == .success {
                 await self.database.deleteE2ETokenLockAsync(account: account, serverUrl: result.serverUrl)
             }

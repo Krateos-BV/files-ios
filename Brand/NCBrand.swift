@@ -51,6 +51,7 @@ struct NextcloudVersion: Comparable {
     static let v32_0_2 = NextcloudVersion(32, 0, 2)
     static let v33 = NextcloudVersion(33)
     static let v34 = NextcloudVersion(34)
+    static let v35 = NextcloudVersion(35)
 
     static func < (lhs: NextcloudVersion, rhs: NextcloudVersion) -> Bool {
         (lhs.major, lhs.minor, lhs.micro) < (rhs.major, rhs.minor, rhs.micro)
@@ -74,6 +75,8 @@ final class NCBrandOptions: @unchecked Sendable {
     var mobileconfig: String = "/remote.php/dav/provisioning/apple-provisioning.mobileconfig"
     var appStoreUrl: String = "" // TODO: set to the Xenia Files App Store URL once the app id exists
 
+    var doNotAskPasscodeAtStartup: Bool = false
+
     // Auto Upload default folder
     var folderDefaultAutoUpload: String = "Photos"
 
@@ -82,7 +85,7 @@ final class NCBrandOptions: @unchecked Sendable {
     var capabilitiesGroupApps: String = "group.eu.xeniacloud.apps"
 
     // BRAND ONLY
-    var use_AppConfig: Bool = false                                                         // Don't touch me !!
+    var use_AppConfig: Bool = false
 
     // Use server theming color
     var use_themingColor: Bool = true
@@ -99,7 +102,6 @@ final class NCBrandOptions: @unchecked Sendable {
     var disable_log: Bool = false
     var disable_mobileconfig: Bool = false  
     var disable_show_more_nextcloud_apps_in_settings: Bool = true
-    var doNotAskPasscodeAtStartup: Bool = false
     var disable_source_code_in_settings: Bool = false
     var enforce_passcode_lock = false
     var enforce_privacyScreenEnabled = false
@@ -121,9 +123,6 @@ final class NCBrandOptions: @unchecked Sendable {
     // Number of failed attempts before resetting the app
     let resetAppPasscodeAttempts: Int = 10
     let passcodeSecondsFail: Int = 60
-
-    // Enables the PhotoKit background resource upload extension on iOS 27 and later.
-    var enable_background_upload_extension: Bool = false
 
     // Info Paging
     enum NCInfoPagingTab: Int, CaseIterable {
@@ -165,6 +164,20 @@ final class NCBrandOptions: @unchecked Sendable {
             // DEBUG SERVER PUSH
             // pushNotificationServerProxy = "https://c0004.customerpush.nextcloud.com"
         }
+
+        // The upstream UI tests (BaseUIXCTestCase.logIn) tap the intro "login" button and type
+        // TestConstants.server into the server field to reach the Nextcloud container CI starts.
+        // Our single-tenant lock skips the intro and disables that field, so every UI test died
+        // at login (XEN-293; same call as talk-ios XEN-202). Restore upstream's login flow only
+        // for UI_TESTING launches, and only under #if DEBUG: the Test action builds Debug and
+        // Archive builds Release, so no shipped binary contains this escape hatch.
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
+            loginBaseUrl = ""
+            disable_intro = false
+            disable_request_login_url = false
+        }
+        #endif
     }
 
     @objc func getUserAgent() -> String {

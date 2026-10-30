@@ -34,13 +34,8 @@ class NCAccount: NSObject {
                                           httpMaximumConnectionsPerHostInDownload: NCBrandOptions.shared.httpMaximumConnectionsPerHostInDownload,
                                           httpMaximumConnectionsPerHostInUpload: NCBrandOptions.shared.httpMaximumConnectionsPerHostInUpload,
                                           groupIdentifier: NCBrandOptions.shared.capabilitiesGroup)
-        let resultsGetUserProfile = await NextcloudKit.shared.getUserProfileAsync(account: account) { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                            name: "getUserProfile")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
-        }
+        let resultsGetUserProfile = await NextcloudKit.shared.getUserProfileAsync(account: account)
+
         guard resultsGetUserProfile.error == .success, let userProfile = resultsGetUserProfile.userProfile else {
             NextcloudKit.shared.nkCommonInstance.nksessions.remove(account: account)
             let alertController = UIAlertController(title: NSLocalizedString("_error_", comment: ""), message: resultsGetUserProfile.error.errorDescription, preferredStyle: .alert)
@@ -147,11 +142,21 @@ class NCAccount: NSObject {
             }
             // Remove account in all database
             database.clearDatabase(account: account)
+            do {
+                try await NCLocalDatabase.shared.clearDatabase(account: account)
+            } catch {
+                nkLog(error: "Unable to clear GRDB data for account \(account): \(error)")
+            }
         } else {
             // Remove account
             await database.clearTableAsync(tableAccount.self, account: account)
             // Remove autoupload
             await database.clearTableAsync(tableAutoUploadTransfer.self, account: account)
+            do {
+                try await NCLocalDatabase.shared.removeAutoUploadResources(account: account)
+            } catch {
+                nkLog(error: "Unable to remove background upload history for account \(account): \(error)")
+            }
         }
         // Remove session in NextcloudKit
         NextcloudKit.shared.nkCommonInstance.nksessions.remove(account: account)
@@ -223,14 +228,7 @@ class NCAccount: NSObject {
         let windowScene = SceneManager.shared.getWindowScene(controller: controller)
         await showErrorBanner(windowScene: windowScene, text: String(format: NSLocalizedString("_account_unauthorized_", comment: ""), account), errorCode: NCGlobal.shared.errorUnauthorized)
 
-        let resultsWipe = await NextcloudKit.shared.getRemoteWipeStatusAsync(serverUrl: tblAccount.urlBase, token: token, account: account) { task in
-            Task {
-                let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: account,
-                                                                                            path: tblAccount.urlBase,
-                                                                                            name: "getRemoteWipeStatus")
-                await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-            }
-        }
+        let resultsWipe = await NextcloudKit.shared.getRemoteWipeStatusAsync(serverUrl: tblAccount.urlBase, token: token, account: account)
 
         // REMOVE ACCOUNT
         guard !Task.isCancelled,
@@ -239,14 +237,7 @@ class NCAccount: NSObject {
         }
         await NCAccount().deleteAccount(account, wipe: resultsWipe.wipe)
         if resultsWipe.wipe {
-            let resultsSetWipe = await NextcloudKit.shared.setRemoteWipeCompletitionAsync(serverUrl: tblAccount.urlBase, token: token, account: tblAccount.account) { task in
-                Task {
-                    let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: tblAccount.account,
-                                                                                                path: tblAccount.urlBase,
-                                                                                                name: "setRemoteWipeCompletition")
-                    await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
-                }
-            }
+            let resultsSetWipe = await NextcloudKit.shared.setRemoteWipeCompletitionAsync(serverUrl: tblAccount.urlBase, token: token, account: tblAccount.account)
             nkLog(debug: "Set Remote Wipe Completition error code: \(resultsSetWipe.error.errorCode)")
         }
 

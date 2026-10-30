@@ -18,8 +18,6 @@ class NCSectionFirstHeader: UICollectionReusableView, UIGestureRecognizerDelegat
 
     @IBOutlet weak var viewRichWorkspaceHeightConstraint: NSLayoutConstraint!
     @IBOutlet weak var viewRecommendationsHeightConstraint: NSLayoutConstraint!
-    @IBOutlet private weak var viewRecommendationsLeadingConstraint: NSLayoutConstraint!
-    @IBOutlet private weak var viewRecommendationsTrailingConstraint: NSLayoutConstraint!
     @IBOutlet weak var viewSectionHeightConstraint: NSLayoutConstraint!
 
     @IBOutlet weak var textViewRichWorkspace: UITextView!
@@ -35,7 +33,6 @@ class NCSectionFirstHeader: UICollectionReusableView, UIGestureRecognizerDelegat
     private let richWorkspaceGradient: CAGradientLayer = CAGradientLayer()
     private var recommendations: [tableRecommendedFiles] = []
     private var viewController: UIViewController?
-    private weak var parentCollectionView: UICollectionView?
     private var sceneIdentifier: String = ""
     private var recommendationsIdentity: [String] = []
     private var contentRequestID = UUID()
@@ -50,9 +47,8 @@ class NCSectionFirstHeader: UICollectionReusableView, UIGestureRecognizerDelegat
     override func awakeFromNib() {
         super.awakeFromNib()
 
-        // The recommendations carousel is intentionally allowed to extend beyond
-        // the safe-area-sized parent collection view.
-        clipsToBounds = false
+        // The carousel shares the list's safe-area width, including in split layouts.
+        clipsToBounds = true
 
         //
         // RichWorkspace
@@ -98,37 +94,6 @@ class NCSectionFirstHeader: UICollectionReusableView, UIGestureRecognizerDelegat
         setRichWorkspaceColor()
     }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        updateRecommendationsLayout()
-    }
-
-    private func updateRecommendationsLayout() {
-        guard let viewController else { return }
-
-        let safeAreaInsets = viewController.view.safeAreaInsets
-        viewRecommendationsLeadingConstraint.constant = -safeAreaInsets.left
-        viewRecommendationsTrailingConstraint.constant = -safeAreaInsets.right
-
-        // Keep the final recommendation clear of the safe-area overlay when
-        // scrolled all the way to the end of the carousel.
-        if collectionViewRecommendations.contentInset.right != safeAreaInsets.right {
-            var contentInset = collectionViewRecommendations.contentInset
-            contentInset.right = safeAreaInsets.right
-            collectionViewRecommendations.contentInset = contentInset
-        }
-
-        if collectionViewRecommendations.horizontalScrollIndicatorInsets.right != safeAreaInsets.right {
-            var horizontalScrollIndicatorInsets = collectionViewRecommendations.horizontalScrollIndicatorInsets
-            horizontalScrollIndicatorInsets.right = safeAreaInsets.right
-            collectionViewRecommendations.horizontalScrollIndicatorInsets = horizontalScrollIndicatorInsets
-        }
-    }
-
-    private func setParentCollectionViewClipping(_ clipsToBounds: Bool) {
-        parentCollectionView?.clipsToBounds = clipsToBounds
-    }
-
     func setContent(heightHeaderRichWorkspace: CGFloat,
                     richWorkspaceText: String?,
                     heightHeaderRecommendations: CGFloat,
@@ -148,19 +113,17 @@ class NCSectionFirstHeader: UICollectionReusableView, UIGestureRecognizerDelegat
             self.richWorkspaceText = richWorkspaceText
         }
         setRichWorkspaceColor()
-        let accountChanged = self.recommendations.first?.account != recommendations.first?.account
+        let recommendationsChanged = self.recommendations.count != recommendations.count || self.recommendations.first?.account != recommendations.first?.account
         contentRequestID = UUID()
         let requestID = contentRequestID
         self.recommendations = recommendations
         self.labelSection.text = sectionText
         self.viewController = viewController
-        self.parentCollectionView = parentCollectionView
         self.sceneIdentifier = sceneItentifier
         self.delegate = delegate
 
         let recommendationsVisible = heightHeaderRecommendations != 0 && !recommendations.isEmpty
-        setParentCollectionViewClipping(!recommendationsVisible)
-        updateRecommendationsLayout()
+        parentCollectionView?.clipsToBounds = true
 
         if heightHeaderRichWorkspace != 0, let richWorkspaceText, !richWorkspaceText.isEmpty {
             viewRichWorkspace.isHidden = false
@@ -180,7 +143,7 @@ class NCSectionFirstHeader: UICollectionReusableView, UIGestureRecognizerDelegat
             viewSection.isHidden = false
         }
 
-        if accountChanged {
+        if recommendationsChanged {
             recommendationsIdentity = []
             collectionViewRecommendations.reloadData()
         }
@@ -241,13 +204,21 @@ extension NCSectionFirstHeader: UICollectionViewDataSource {
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let recommendedFile = self.recommendations[indexPath.row]
-        guard let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: "cell",
-            for: indexPath
-        ) as? NCRecommendationsCell else {
+        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as? NCRecommendationsCell else {
             fatalError("Unable to dequeue NCRecommendationsCell")
         }
+
+        guard recommendations.indices.contains(indexPath.item) else {
+            cell.imageRequestID = UUID()
+            cell.metadata = nil
+            cell.image.image = nil
+            cell.labelInfo.text = nil
+            cell.labelFilename.text = nil
+            cell.labelExtensionFilename.text = nil
+            return cell
+        }
+
+        let recommendedFile = recommendations[indexPath.item]
 
         cell.representedFileId = recommendedFile.id
         cell.representedAccount = recommendedFile.account
@@ -427,11 +398,11 @@ extension NCSectionFirstHeader: UICollectionViewDelegate {
         return nil
 #else
         return UIContextMenuConfiguration(identifier: identifier, previewProvider: {
-            return NCViewerProviderContextMenu(metadata: metadata, image: image, sceneIdentifier: self.sceneIdentifier)
+            return NCViewerProviderContextMenu(metadata: metadata, image: image, sceneIdentifier: self.sceneIdentifier, sourceView: viewController.view)
         }, actionProvider: { _ in
             let cell = collectionView.cellForItem(at: indexPath)
             let contextMenu = NCContextMenuMain(metadata: metadata.detachedCopy(), viewController: viewController, controller: self.controller, sender: cell)
-            return contextMenu.viewMenu()
+            return contextMenu.viewMenu(showViewInFolder: true)
         })
 #endif
     }
@@ -452,7 +423,7 @@ extension NCSectionFirstHeader: NCRecommendationsCellDelegate {
             button.menu = nil
             return
         }
-        button.menu = NCContextMenuMain(metadata: metadata, viewController: viewController, controller: self.controller, sender: sender).viewMenu()
+        button.menu = NCContextMenuMain(metadata: metadata, viewController: viewController, controller: self.controller, sender: sender).viewMenu(showViewInFolder: true)
 #endif
     }
 
