@@ -45,25 +45,18 @@ final class TransfersViewModel: ObservableObject, NCMetadataDownloadTransfersSuc
 
     init(session: NCSession.Session) {
         self.session = session
-
-        Task { @MainActor in
-            await NCNetworking.shared.transferDispatcher.addDelegate(self)
-            await NCNetworking.shared.metadataUploadTranfersSuccess.addDelegate(self)
-            await NCNetworking.shared.metadataDownloadTranfersSuccess.addDelegate(self)
-            await pollTransfers()
-        }
     }
 
-    deinit {
-        print("deinit")
-    }
-
-    func detach() {
-        Task { @MainActor in
-            await NCNetworking.shared.transferDispatcher.removeDelegate(self)
-            await NCNetworking.shared.metadataUploadTranfersSuccess.removeDelegate(self)
-            await NCNetworking.shared.metadataDownloadTranfersSuccess.removeDelegate(self)
-        }
+    /// Observe only while the screen is visible, including subsequent visits to its tab.
+    @MainActor
+    func observeTransfers() async {
+        await networking.transferDispatcher.addDelegate(self)
+        await networking.metadataUploadTranfersSuccess.addDelegate(self)
+        await networking.metadataDownloadTranfersSuccess.addDelegate(self)
+        await pollTransfers()
+        await networking.transferDispatcher.removeDelegate(self)
+        await networking.metadataUploadTranfersSuccess.removeDelegate(self)
+        await networking.metadataDownloadTranfersSuccess.removeDelegate(self)
     }
 
     @MainActor
@@ -122,12 +115,26 @@ final class TransfersViewModel: ObservableObject, NCMetadataDownloadTransfersSuc
         }
 
         if metadata.backgroundUploadJobIdentifier == "pending" {
+            let resumesQueue = metadata.status == global.metadataStatusUploadError
+
+            if resumesQueue {
+                // Discarding the blocking error is an explicit request to continue with the other files.
+                NCPreferences().setBackgroundUploadSuspended(false, account: metadata.account)
+            }
+
             await database.deleteMetadataAsync(id: metadata.ocId)
+
+            if resumesQueue, #available(iOS 27, *) {
+                _ = await NCBackgroundUploadExtensionManager.shared.ensureEnabled()
+            }
             return
         }
 
         metadata.backgroundUploadCancellationRequested = true
         await database.replaceMetadataAsync(ocId: metadata.ocId, metadata: metadata)
+        if #available(iOS 27, *) {
+            await NCBackgroundUploadExtensionManager.shared.cancelUploads(account: metadata.account)
+        }
     }
 
     func canRetry(item: tableMetadata) -> Bool {
@@ -151,6 +158,9 @@ final class TransfersViewModel: ObservableObject, NCMetadataDownloadTransfersSuc
         ) != nil else {
             return
         }
+
+        // Retrying one failed item explicitly resumes the background queue for its account.
+        NCPreferences().setBackgroundUploadSuspended(false, account: metadata.account)
 
         guard await NCBackgroundUploadExtensionManager.shared.ensureEnabled() else {
             return

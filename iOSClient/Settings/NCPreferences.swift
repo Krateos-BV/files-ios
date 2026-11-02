@@ -12,6 +12,13 @@ final class NCPreferences: NSObject {
     private static let userDefaultsMigrationKey = "NCPreferencesUserDefaultsMigrationVersion"
     private static let userDefaultsMigrationVersion = 1
 
+    /// Shared directory used by the app and its extensions for the persistent NextcloudKit log.
+    static var sharedLogDirectory: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: NCBrandOptions.shared.capabilitiesGroup)?
+            .appendingPathComponent("Logs", isDirectory: true)
+    }
+
     let keychain = Keychain(service: "com.nextcloud.keychain")
     private let userDefaults: UserDefaults
 
@@ -154,7 +161,8 @@ final class NCPreferences: NSObject {
     }
 
     var presentPasscode: Bool {
-        return passcode != nil && requestPasscodeAtStart
+        // After a lockout, only successful authentication may restore access, even after relaunch.
+        return passcode != nil && (requestPasscodeAtStart || passcodeCounterFailReset >= 3)
     }
 
     var incrementalNumber: String {
@@ -390,15 +398,6 @@ final class NCPreferences: NSObject {
     func setPassword(account: String, password: String?) {
         let key = "password" + account
         keychain[key] = password
-    }
-
-    func setPersonalFilesOnly(account: String, value: Bool) {
-        let userDefaultsKey = "personalfilesonly" + "_\(account)"
-        setUserDefaults(value, forKey: userDefaultsKey)
-    }
-
-    func getPersonalFilesOnly(account: String) -> Bool {
-        return getBoolPreference(key: "personalfilesonly", account: account, defaultValue: false)
     }
 
     func setFavoriteOnTop(account: String, value: Bool) {
@@ -684,6 +683,82 @@ final class NCPreferences: NSObject {
         let value = getStringPreference(key: "AlbumIds", account: account, defaultValue: "")
         let arrayValue = value.components(separatedBy: ",").filter { !$0.isEmpty }
         return arrayValue
+    }
+
+    // MARK: - Background Upload Extension
+
+    /// Reports whether this installation may expose the experimental background upload setting.
+    /// Debug builds are always eligible; release builds are eligible only with a TestFlight receipt.
+    static var canConfigureBackgroundUploadExtension: Bool {
+#if DEBUG
+        return true
+#else
+        let bundles = [
+            Bundle.main,
+            Bundle(url: Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent())
+        ]
+
+        return bundles.contains {
+            $0?.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        }
+#endif
+    }
+
+    /// Stores the user's opt-in for the experimental PhotoKit background upload extension.
+    /// The default is `false` and the value is shared with the extension through the App Group.
+    var backgroundUploadExtensionEnabled: Bool {
+        get {
+            getBoolPreference(key: "backgroundUploadExtensionEnabled", defaultValue: false)
+        }
+        set {
+            setUserDefaults(newValue, forKey: "backgroundUploadExtensionEnabled")
+        }
+    }
+
+    /// Returns the effective feature state after applying Debug or TestFlight eligibility.
+    /// This prevents a stored TestFlight opt-in from carrying over to an App Store installation.
+    var shouldUseBackgroundUploadExtension: Bool {
+        Self.canConfigureBackgroundUploadExtension && backgroundUploadExtensionEnabled
+    }
+
+    /// Reports whether automatic background uploads are suspended for the account.
+    /// The value is shared between the host app and its background upload extension.
+    func isBackgroundUploadSuspended(account: String) -> Bool {
+        getBoolPreference(key: "BackgroundUploadSuspended", account: account, defaultValue: false)
+    }
+
+    /// Suspends or resumes automatic background uploads for the account.
+    /// Resuming also clears the consecutive-failure circuit breaker for a fresh queue attempt.
+    func setBackgroundUploadSuspended(_ suspended: Bool, account: String) {
+        let key = "Preferences_BackgroundUploadSuspended_\(account)"
+
+        if suspended {
+            userDefaults.set(true, forKey: key)
+        } else {
+            userDefaults.removeObject(forKey: key)
+            resetBackgroundUploadConsecutiveFailures(account: account)
+        }
+    }
+
+    /// Records one terminal failure per distinct Photos asset and returns the consecutive count.
+    /// Repeated processing of the same failed asset does not advance the account circuit breaker.
+    func recordBackgroundUploadFailure(account: String, assetIdentifier: String) -> Int {
+        let failedAssetsKey = "Preferences_BackgroundUploadFailedAssets_\(account)"
+        var failedAssetIdentifiers = userDefaults.stringArray(forKey: failedAssetsKey) ?? []
+
+        guard !failedAssetIdentifiers.contains(assetIdentifier) else {
+            return failedAssetIdentifiers.count
+        }
+
+        failedAssetIdentifiers.append(assetIdentifier)
+        userDefaults.set(failedAssetIdentifiers, forKey: failedAssetsKey)
+        return failedAssetIdentifiers.count
+    }
+
+    /// Clears consecutive terminal failures after a successful upload.
+    /// This intentionally leaves an existing suspension flag unchanged until explicit user action.
+    func resetBackgroundUploadConsecutiveFailures(account: String) {
+        userDefaults.removeObject(forKey: "Preferences_BackgroundUploadFailedAssets_\(account)")
     }
 
     // MARK: - Upload Asset (autoupload folder)

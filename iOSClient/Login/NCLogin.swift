@@ -91,12 +91,13 @@ class NCLogin: UIViewController, UITextFieldDelegate, NCLoginQRCodeDelegate {
         // QR code button
         qrCode.tintColor = NCBrandColor.shared.customer.isTooLight() ? .black : .white
 
+        urlBase = NCBrandOptions.shared.loginBaseUrl
+
         // brand
         if NCBrandOptions.shared.disable_request_login_url {
             baseUrlTextField.isEnabled = false
             baseUrlTextField.isUserInteractionEnabled = false
             baseUrlTextField.alpha = 0.5
-            urlBase = NCBrandOptions.shared.loginBaseUrl
         }
 
         // certificate
@@ -312,9 +313,9 @@ class NCLogin: UIViewController, UITextFieldDelegate, NCLoginQRCodeDelegate {
             vc.dismissDidEnterBackground = false
             vc.delegate = self
 
-            let screenHeighMax = UIScreen.main.bounds.height - (UIScreen.main.bounds.height / 5)
+            let maximumHeight = view.safeAreaLayoutGuide.layoutFrame.height * 0.8
             let numberCell = shareAccounts.count
-            let height = min(CGFloat(numberCell * Int(vc.heightCell) + 45), screenHeighMax)
+            let height = min(CGFloat(numberCell * Int(vc.heightCell) + 45), maximumHeight)
             let popup = NCPopupViewController(contentController: vc, popupWidth: 300, popupHeight: height + 20)
 
             self.present(popup, animated: true)
@@ -483,7 +484,7 @@ class NCLogin: UIViewController, UITextFieldDelegate, NCLoginQRCodeDelegate {
     @MainActor
     private func createAccount(urlBase: String, user: String, password: String) async {
         if self.controller == nil {
-            self.controller = UIApplication.shared.mainAppWindow?.rootViewController as? NCMainTabBarController
+            self.controller = SceneManager.shared.getController(window: UIApplication.shared.mainAppWindow)
         }
 
         if let host = URL(string: urlBase)?.host {

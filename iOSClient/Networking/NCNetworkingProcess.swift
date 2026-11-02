@@ -146,7 +146,7 @@ actor NCNetworkingProcess {
 
     @MainActor
     private func getRootController() -> NCMainTabBarController? {
-        UIApplication.shared.mainAppWindow?.rootViewController as? NCMainTabBarController
+        SceneManager.shared.getController(window: UIApplication.shared.mainAppWindow)
     }
 
     @MainActor
@@ -359,10 +359,19 @@ actor NCNetworkingProcess {
         guard await MainActor.run(body: { UIApplication.shared.applicationState == .active }) else {
             return
         }
+
+        let account = currentAccount
         let livePhotoAccounts = await NCManageDatabase.shared.getLivePhotoAccounts()
         let localIdentifiers: [String]
         if NCPreferences().removePhotoCameraRoll {
-            localIdentifiers = await NCManageDatabase.shared.getAssetLocalIdentifiersUploadedAsync() ?? []
+            do {
+                localIdentifiers = try await NCLocalDatabase.shared
+                    .uploadedPhotoLibraryAssets(account: account)
+                    .map(\.assetLocalIdentifier)
+            } catch {
+                nkLog(error: "Unable to read uploaded photo library assets for \(account): \(error)")
+                localIdentifiers = []
+            }
         } else {
             localIdentifiers = []
         }
@@ -392,7 +401,13 @@ actor NCNetworkingProcess {
               await Self.removeUploadedAssets(localIdentifiers) else {
             return
         }
-        await NCManageDatabase.shared.clearAssetLocalIdentifiersAsync(localIdentifiers)
+
+        do {
+            try await NCLocalDatabase.shared.removePhotoLibraryAssets(account: account, assetLocalIdentifiers: localIdentifiers)
+        } catch {
+            nkLog(error: "Unable to remove deleted photo library assets for \(account): \(error)")
+            return
+        }
     }
 
     @MainActor
@@ -513,8 +528,22 @@ actor NCNetworkingProcess {
             if !isWiFi && metadata.session == networking.sessionUploadBackgroundWWan {
                 continue
             }
+            var backgroundUploadResource: NCAutoUploadResource?
+            if metadata.sessionSelector == global.selectorUploadAutoUpload {
+                do {
+                    backgroundUploadResource = try await NCLocalDatabase.shared.autoUploadResource(for: metadata)
+                } catch {
+                    // Leave the pending metadata intact; a failed lookup is not a failed extraction.
+                    nkLog(error: "Unable to resolve background upload component: \(error)")
+                    continue
+                }
+            }
+            if backgroundUploadResource?.uploaded == true {
+                await removeCompletedBackgroundUploadTransfer(metadata)
+                continue
+            }
             // extract image/video
-            let extractMetadatas = await NCCameraRoll().extractCameraRoll(from: metadata)
+            let extractMetadatas = await NCCameraRoll().extractCameraRoll(from: metadata, expandsLivePhoto: backgroundUploadResource == nil)
             guard timer != nil else { return }
             // no extract photo
             if extractMetadatas.isEmpty {
@@ -529,25 +558,40 @@ actor NCNetworkingProcess {
 
                 // IS TRANSFER SUCCESS
                 //
-                if await NCNetworking.shared.metadataUploadTranfersSuccess.exists(serverUrlFileName: metadata.serverUrlFileName) {
-                    // File exists
+                if await NCNetworking.shared.metadataUploadTranfersSuccess.exists(
+                    serverUrlFileName: metadata.serverUrlFileName,
+                    transferIdentifier: backgroundUploadResource?.transferIdentifier
+                ) {
+                    // Skip this completed attempt, without suppressing another forced upload to the same path.
                     continue
                 }
 
-                // AUTO-UPLOAD: CHECK FILE EXISTS
+                // AUTO-UPLOAD: CHECK PROGRESS AND FILE EXISTS
                 //
                 if metadata.sessionSelector == global.selectorUploadAutoUpload {
-                    let existsResult = await networking.fileExists(serverUrlFileName: metadata.serverUrlFileName, account: metadata.account)
-                    if existsResult == .success {
-                        // File exists → delete from local metadata and skip
-                        await NCManageDatabase.shared.deleteMetadataAsync(id: metadata.ocId)
-                        continue
-                    } else if existsResult.errorCode == 404 {
-                        // 404 Not Found → file does not exist
-                        // Proceed
-                    } else {
-                        // Any other error (423 locked, 401 auth, 403 forbidden, 5xx, etc.)
-                        continue
+                    if let uploadAccount = await database.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", metadata.account)),
+                       !uploadAccount.autoUploadForceReupload {
+                        let existsResult = await networking.fileExists(serverUrlFileName: metadata.serverUrlFileName, account: metadata.account)
+                        if existsResult == .success {
+                            if backgroundUploadResource != nil {
+                                do {
+                                    try await NCLocalDatabase.shared.recordAutoUploadTransfer(metadata, uploaded: true)
+                                } catch {
+                                    nkLog(error: "Unable to record existing background upload component: \(error)")
+                                    continue
+                                }
+                                await removeCompletedBackgroundUploadTransfer(metadata)
+                            } else {
+                                await database.completeExistingAutoUploadAsync(metadata)
+                            }
+                            continue
+                        } else if existsResult.errorCode == 404 {
+                            // 404 Not Found → file does not exist
+                            // Proceed
+                        } else {
+                            // Any other error (423 locked, 401 auth, 403 forbidden, 5xx, etc.)
+                            continue
+                        }
                     }
                 }
 
@@ -775,5 +819,21 @@ actor NCNetworkingProcess {
         }
 
         return .success
+    }
+
+    /// Releases only the shared transfer queue and its local file; GRDB completion is already confirmed.
+    private func removeCompletedBackgroundUploadTransfer(_ metadata: tableMetadata) async {
+        let database = NCManageDatabase.shared
+        let ocId = metadata.ocId
+
+        await database.deleteMetadataAsync(ocId: ocId)
+        guard !ocId.isEmpty,
+              await database.core.performRealmReadAsync({ realm in
+                  realm.object(ofType: tableMetadata.self, forPrimaryKey: ocId) == nil
+              }) == true else { return }
+        let storagePath = utilityFileSystem.getDocumentStorage(userId: metadata.userId, urlBase: metadata.urlBase)
+        guard !storagePath.isEmpty else { return }
+        let transferDirectory = URL(fileURLWithPath: storagePath, isDirectory: true).appendingPathComponent(ocId, isDirectory: true)
+        utilityFileSystem.removeFile(atPath: transferDirectory.path)
     }
 }

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
+import UIKit
 import Combine
 import NextcloudKit
 
@@ -20,6 +21,11 @@ struct NCSettingsView: View {
     @State private var showBrowser = false
     // State to control the visibility of the Source Code  view
     @State private var showSourceCode = false
+#if DEBUG
+    @State private var isExportingDatabase = false
+    @State private var showDatabaseExportError = false
+    @State private var databaseExportError = ""
+#endif
     // Object of ViewModel of this view
     @ObservedObject var model: NCSettingsModel
 
@@ -41,11 +47,12 @@ struct NCSettingsView: View {
                             .opacity(NCBrandOptions.shared.enforce_passcode_lock ? 0.5 : 1)
                             .frame(width: 39)
 
-                        Text(model.isLockActive ? NSLocalizedString("_lock_active_", comment: "") : NSLocalizedString("_lock_not_active_", comment: ""))
+                        Text(model.isLockActive ? NSLocalizedString("_turn_passcode_off_", comment: "") : NSLocalizedString("_turn_passcode_on_", comment: ""))
                             .font(.body)
                     }
                 })
                 .tint(Color(NCBrandColor.shared.textColor))
+                .accessibilityIdentifier("settings.passcode.toggle")
                 .disabled(NCBrandOptions.shared.enforce_passcode_lock)
             }, header: {
                 Text(NSLocalizedString("_privacy_", comment: ""))
@@ -70,12 +77,18 @@ struct NCSettingsView: View {
                                     .tint(Color(NCBrandColor.shared.textColor))
                             }
                         })
+                        .accessibilityIdentifier("settings.passcode.change")
                         // Enable Touch ID
-                        Toggle(NSLocalizedString("_enable_touch_face_id_", comment: ""), isOn: $model.enableTouchFaceID)
-                            .font(.body)
-                            .onChange(of: model.enableTouchFaceID) {
-                                model.updateTouchIDSetting()
+                        Toggle(NSLocalizedString("_enable_touch_face_id_", comment: ""), isOn: Binding(
+                            get: { model.enableTouchFaceID },
+                            set: { enabled in
+                                Task { @MainActor in
+                                    await model.updateTouchIDSettingAsync(enabled)
+                                }
                             }
+                        ))
+                        .font(.body)
+                        .disabled(model.isUpdatingTouchID)
 
                         if !NCBrandOptions.shared.enforce_passcode_lock {
                             // Do not ask for passcode on startup
@@ -88,6 +101,7 @@ struct NCSettingsView: View {
 
                         // Reset app wrong attempts
                         Toggle(NSLocalizedString("_reset_wrong_passcode_option_", comment: ""), isOn: $model.resetWrongAttempts)
+                            .accessibilityIdentifier("settings.passcode.reset")
                             .font(.body)
                             .onChange(of: model.resetWrongAttempts) {
                                 model.updateResetWrongAttemptsSetting()
@@ -259,6 +273,20 @@ struct NCSettingsView: View {
             })
 #if DEBUG
             Section(header: Text("Debug").font(.headline), content: {
+                Button(action: exportDebugDatabase, label: {
+                    HStack {
+                        Image(systemName: "cylinder.split.1x2")
+                            .font(.icon())
+                            .foregroundColor(.orange)
+                            .frame(width: 39)
+
+                        Text(isExportingDatabase ? "Exporting GRDB database…" : "Export GRDB database")
+                            .font(.body)
+                    }
+                })
+                .tint(Color(NCBrandColor.shared.textColor))
+                .disabled(isExportingDatabase)
+
                 Button(action: {
                     fatalError("🔥 Crash test")
                 }, label: {
@@ -283,15 +311,89 @@ struct NCSettingsView: View {
                     .font(.footnote)
             })
         }
+        .onReceive(NotificationCenter.default.publisher(for: NCPasscodeModel.lockoutNotification)) { _ in
+            // The scene's mandatory window takes over; do not leave the settings operation open underneath.
+            if showPasscode || showChangePasscode {
+                completePasscode(.cancelled)
+            }
+        }
         .sheet(isPresented: $showPasscode) {
-            SetupPasscodeView(isLockActive: $model.isLockActive, controller: model.controller)
+            NCPasscodeView(mode: NCPreferences().passcode == nil ? .create : .disable,
+                           allowCancel: true,
+                           windowScene: SceneManager.shared.getWindowScene(controller: model.controller),
+                           completion: completePasscode)
         }
         .sheet(isPresented: $showChangePasscode) {
-            SetupPasscodeView(isLockActive: $model.isLockActive, controller: model.controller, changePasscode: true)
+            NCPasscodeView(mode: .change,
+                           allowCancel: true,
+                           windowScene: SceneManager.shared.getWindowScene(controller: model.controller),
+                           completion: completePasscode)
         }
+#if DEBUG
+        .alert("Database export failed", isPresented: $showDatabaseExportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(databaseExportError)
+        }
+#endif
         .navigationBarTitle(NSLocalizedString("_settings_", comment: ""))
         .defaultViewModifier(model)
     }
+
+    /// Update the lock setting only after the passcode operation has completed.
+    private func completePasscode(_ result: NCPasscodeModel.Result) {
+        switch result {
+        case .configured:
+            model.isLockActive = true
+        case .disabled:
+            model.isLockActive = false
+        case .reset:
+            (UIApplication.shared.delegate as? AppDelegate)?.resetApplication()
+        case .authenticated, .cancelled:
+            break
+        }
+        showPasscode = false
+        showChangePasscode = false
+    }
+
+#if DEBUG
+    private func exportDebugDatabase() {
+        isExportingDatabase = true
+
+        Task {
+            defer { isExportingDatabase = false }
+
+            do {
+                let exportURL = try await Task.detached(priority: .userInitiated) {
+                    try NCLocalDatabase.shared.exportDebugDatabase()
+                }.value
+
+                guard let controller = model.controller else {
+                    throw CocoaError(.coderInvalidValue)
+                }
+                let presentingViewController = controller.topMostViewController()
+
+                let activityViewController = UIActivityViewController(
+                    activityItems: [exportURL],
+                    applicationActivities: nil
+                )
+                if let popover = activityViewController.popoverPresentationController {
+                    popover.sourceView = presentingViewController.view
+                    popover.sourceRect = CGRect(
+                        x: presentingViewController.view.bounds.midX,
+                        y: presentingViewController.view.bounds.midY,
+                        width: 0,
+                        height: 0
+                    )
+                }
+                presentingViewController.present(activityViewController, animated: true)
+            } catch {
+                databaseExportError = error.localizedDescription
+                showDatabaseExportError = true
+            }
+        }
+    }
+#endif
 }
 
 struct E2EESection: View {
