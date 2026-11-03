@@ -1,0 +1,14 @@
+{
+  "bundle_id_prefix": "eu.xeniacloud.files",
+  "allowed_app_groups": ["group.eu.xeniacloud.files", "group.eu.xeniacloud.apps"],
+  "login": {
+    "file": "Brand/NCBrand.swift",
+    "contains": "var loginBaseUrl: String = \"https://portal.xeniacloud.eu\""
+  },
+  "brand_colours": {
+    "mode": "warn",
+    "shipped_dirs": ["iOSClient", "Brand", "Share", "Widget", "WidgetDashboardIntentHandler",
+                     "File Provider Extension", "File Provider Extension UI", "Notification Service Extension",
+                     "Action Assistant", "BackgroundUploadExtension"]
+  }
+}
