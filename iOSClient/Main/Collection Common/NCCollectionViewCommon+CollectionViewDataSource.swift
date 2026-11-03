@@ -93,7 +93,7 @@ extension NCCollectionViewCommon: UICollectionViewDataSource {
 
         // PREVIEW IMAGE
         //
-        let ext = self.global.getSizeExtension(column: self.numberOfColumns)
+        let ext = self.global.getSizeExtension(column: self.numberOfColumns, viewWidth: self.collectionView.bounds.width)
         let imageExists = self.utilityFileSystem.fileProviderStorageImageExists(ocId, etag: metadata.etag, userId: metadata.userId, urlBase: metadata.urlBase)
 
         guard metadata.hasPreview,
@@ -199,7 +199,7 @@ extension NCCollectionViewCommon: UICollectionViewDataSource {
                 let recommendations = self.database.getRecommendedFiles(account: self.session.account)
                 var sectionText = NSLocalizedString("_all_files_", comment: "")
 
-                if NCPreferences().getPersonalFilesOnly(account: session.account) {
+                if (self as? NCFiles)?.personalFilesOnly == true {
                     sectionText = NSLocalizedString("_personal_files_", comment: "")
                 }
 

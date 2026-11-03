@@ -13,7 +13,7 @@ line_length:
   error: 5000
 
 function_body_length:
-   warning: 400
+   warning: 500
 
 type_body_length:
   warning: 2000
@@ -48,7 +48,6 @@ excluded:
   - Tests
   - Brand/NCBrand.swift
   - iOSClient/NCGlobal.swift
-  - iOSClient/Utility/NCLivePhoto.swift
   - DerivedData
   - .claude
   
