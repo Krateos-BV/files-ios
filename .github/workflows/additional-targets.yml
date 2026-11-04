@@ -23,7 +23,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build and Test
-    runs-on: xcode-27
+    runs-on: [self-hosted, macOS, ARM64]
     if: github.event.pull_request.draft == false
     env:
       PROJECT: Nextcloud.xcodeproj
