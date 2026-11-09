@@ -71,8 +71,13 @@ jobs:
 
   test:
     name: Run Tests
+<<<<<<< HEAD
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 30
+=======
+    runs-on: xcode-27
+    timeout-minutes: 40
+>>>>>>> upstream/master
     needs: [build]
 
     if: github.event.pull_request.draft == false
@@ -106,16 +111,7 @@ jobs:
           while IFS= read -r -d '' changed_file; do
             case "$changed_file" in
               iOSClient/Utility/Passcode/* | \
-              iOSClient/Settings/Settings/* | \
-              iOSClient/Settings/NCPreferences.swift | \
-              iOSClient/SceneDelegate.swift | \
-              iOSClient/AppDelegate.swift | \
-              Share/NCShareExtension.swift | \
-              Brand/* | \
-              Tests/NextcloudUITests/* | \
-              Tests/TestConstants.swift | \
-              Nextcloud.xcodeproj/* | \
-              .github/workflows/xcode.yml)
+              Tests/NextcloudUITests/PasscodeUITests.swift)
                 run_passcode_tests=true
                 break
                 ;;
