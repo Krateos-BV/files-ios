@@ -67,12 +67,10 @@ permissions:
 env:
   PROJECT: Nextcloud.xcodeproj
   SCHEME: Nextcloud
-  # xcode.yml (the existing unsigned CI build) still targets xcode-27 on the
-  # self-hosted runner -- nothing indicates that requirement has been lifted
-  # for this project, despite XNT-229 disabling BackgroundUploadExtension's
-  # embedding to unblock *some* hosted-runner builds. Matching current CI
-  # rather than assuming.
-  XCODE_VERSION: "27.0"
+  # Keep in step with xcode.yml. Upstream 35.2.2 uses iOS 27.1 SDK APIs
+  # (UIBarButtonItem.axisBehavior, reservedRegions), so 27.0 cannot archive
+  # it (release run 43425567145, tag 26.11.11).
+  XCODE_VERSION: "27.2"
   ARCHIVE_PATH: DerivedData/Nextcloud.xcarchive
   EXPORT_PATH: DerivedData/export
   KEYCHAIN_NAME: xenia-release.keychain-db
@@ -80,7 +78,10 @@ env:
 jobs:
   release:
     name: Archive, export, and upload
-    runs-on: xcode-27
+    # Same self-hosted Mac Mini runner as xcode.yml (iOS CI decision of
+    # 2026-11-04). The bare `xcode-27` label had started resolving to a paid
+    # GitHub-hosted runner with Xcode 27.0 only.
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 60
 
     steps:
