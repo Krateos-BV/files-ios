@@ -234,6 +234,20 @@ jobs:
           install_profile "Xenia Files Widget App Store" "$APPLE_PROFILE_FILES_WIDGET"
           install_profile "Xenia Files WidgetDashboardIntentHandler App Store" "$APPLE_PROFILE_FILES_WIDGETDASHBOARD"
 
+      # Same fallback as xcode.yml. The self-hosted Mac Mini has no
+      # xcbeautify, so `| xcbeautify` exited 127 and failed the archive
+      # (release run 43433258413). The shim on GITHUB_PATH covers Archive
+      # and Export.
+      - name: Make sure xcbeautify is available
+        run: |
+          if ! command -v xcbeautify >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/bin"
+            printf '#!/bin/sh\ncat\n' > "$RUNNER_TEMP/bin/xcbeautify"
+            chmod +x "$RUNNER_TEMP/bin/xcbeautify"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+            echo "xcbeautify not installed on this runner; using plain xcodebuild output"
+          fi
+
       - name: Archive (signed, manual signing with Distribution cert + App Store profiles)
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -348,6 +362,11 @@ jobs:
         run: |
           security delete-keychain "$KEYCHAIN_PATH" || true
           rm -f "$ASC_KEY_PATH" || true
+          # The upload step copies the key into ~/private_keys for altool.
+          # On this persistent runner it must not outlive the job.
+          if [ -n "${ASC_KEY_PATH:-}" ]; then
+            rm -f "$HOME/private_keys/$(basename "$ASC_KEY_PATH")" || true
+          fi
 
           # Restore this Mac's own keychain search list -- the Archive step
           # replaced it with just the (now-deleted) temp keychain. Without
