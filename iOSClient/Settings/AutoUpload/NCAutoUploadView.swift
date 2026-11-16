@@ -38,7 +38,6 @@ struct NCAutoUploadView: View {
                 noPermissionsView
             }
         }
-        .hideTopScrollEdgeEffect()
         .navigationBarTitle(NSLocalizedString("_auto_upload_folder_", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -69,6 +68,24 @@ struct NCAutoUploadView: View {
         }
         .alert(model.error, isPresented: $model.showErrorAlert) {
             Button(NSLocalizedString("_ok_", comment: ""), role: .cancel) {}
+        }
+        .alert(NSLocalizedString("_background_location_access_title_", comment: ""), isPresented: $model.showLocationExplanation) {
+            Button(NSLocalizedString("_continue_", comment: "")) {
+                model.requestLocationAuthorization()
+            }
+            Button(NSLocalizedString("_cancel_", comment: ""), role: .cancel) {}
+        } message: {
+            Text(NSLocalizedString("_background_location_access_message_", comment: ""))
+        }
+        .alert(NSLocalizedString("_enable_background_location_title_", comment: ""), isPresented: $model.showLocationSettings) {
+            Button(NSLocalizedString("_open_settings_", comment: "")) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(NSLocalizedString("_cancel_", comment: ""), role: .cancel) {}
+        } message: {
+            Text(NSLocalizedString("_enable_background_location_message_", comment: ""))
         }
         .sheet(isPresented: $showUploadFolder) {
             SelectView(
@@ -392,6 +409,41 @@ struct NCAutoUploadView: View {
                     )
                     .font(.footnote)
                 })
+<<<<<<< HEAD
+=======
+
+                if !model.usesPhotoKitAutoUpload {
+                    Section(content: {
+                        Toggle(
+                            NSLocalizedString(
+                                "_enable_background_location_title_",
+                                comment: ""
+                            ),
+                            isOn: Binding(
+                                get: { model.locationAutoUploadPermissionGranted },
+                                set: { model.handleLocationChange(newValue: $0) }
+                            )
+                        )
+                        .font(.body)
+                        .tint(
+                            Color(
+                                NCBrandColor.shared.getElement(
+                                    account: model.session.account
+                                )
+                            )
+                        )
+                        .disabled(model.isRequestingLocationAuthorization)
+                    }, footer: {
+                        Text(
+                            NSLocalizedString(
+                                "_enable_background_location_footer_",
+                                comment: ""
+                            )
+                        )
+                        .font(.footnote)
+                    })
+                }
+>>>>>>> upstream/master
             }
             .disabled(areSettingsDisabled)
             .opacity(areSettingsDisabled ? 0.5 : 1)

@@ -55,14 +55,14 @@ struct NCSettingsAdvancedView: View {
 
             // Remove from Camera Roll
             Section(content: {
-                Toggle(NSLocalizedString("_remove_photo_CameraRoll_", comment: ""), isOn: $model.removeFromCameraRoll)
+                Toggle(NSLocalizedString("_remove_photo_camera_roll_", comment: ""), isOn: $model.removeFromCameraRoll)
                     .font(.body)
                     .tint(Color(NCBrandColor.shared.getElement(account: model.session.account)))
                     .onChange(of: model.removeFromCameraRoll) {
                         model.updateRemoveFromCameraRoll()
                 }
             }, footer: {
-                Text(NSLocalizedString("_remove_photo_CameraRoll_desc_", comment: ""))
+                Text(NSLocalizedString("_remove_photo_camera_roll_desc_", comment: ""))
                     .font(.footnote)
             })
 
@@ -92,6 +92,35 @@ struct NCSettingsAdvancedView: View {
                         .font(.footnote)
                 })
             }
+<<<<<<< HEAD
+=======
+            // Section: Privacy
+            if !NCBrandOptions.shared.disable_crash_service {
+                Section(content: {
+                    Toggle(NSLocalizedString("_crashservice_title_", comment: ""), isOn: $model.crashReporter)
+                        .font(.body)
+                        .tint(Color(NCBrandColor.shared.getElement(account: model.session.account)))
+                        .onChange(of: model.crashReporter) {
+                            model.updateCrashReporter()
+                            showCrashReporter.toggle()
+                    }
+                    .alert(NSLocalizedString("_crashservice_title_", comment: ""), isPresented: $showCrashReporter, actions: {
+                        Button(NSLocalizedString("_ok_", comment: ""), role: .cancel) {
+                            model.exitNextCloud(ext: showCrashReporter)
+                        }
+                    }, message: {
+                        Text(NSLocalizedString("_crashservice_alert_", comment: ""))
+                            .font(.body)
+                    })
+                }, header: {
+                    Text(NSLocalizedString("_privacy_", comment: ""))
+                        .font(.headline)
+                }, footer: {
+                    Text(NSLocalizedString("_privacy_footer_", comment: ""))
+                        .font(.footnote)
+                })
+            }
+>>>>>>> upstream/master
             // Section: Diagnostic
             if !NCBrandOptions.shared.disable_log {
                 Section(content: {
