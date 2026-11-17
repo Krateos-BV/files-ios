@@ -12,10 +12,12 @@ import SwiftUI
 ///   - isPresented: A Bool value which initiates the webView in the parentView
 ///   - urlBase: A URL value to which our view will open initially
 ///   - browserTitle: A String value to show as the title of the webView
+///   - navigationPolicy: Which pages the webView may navigate to. Defaults to ``NCWebNavigationPolicy/unrestricted``.
 struct NCBrowserWebView: View {
     @Environment(\.presentationMode) var presentationMode: Binding<PresentationMode>
     var urlBase: URL
     var browserTitle: String
+    var navigationPolicy: NCWebNavigationPolicy = .unrestricted
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,7 +47,7 @@ struct NCBrowserWebView: View {
                 .padding()
             }
             Divider()
-            WebView(url: urlBase)
+            WebView(url: urlBase, navigationPolicy: navigationPolicy)
         }
         .navigationBarTitle(Text(""), displayMode: .inline) // Empty title to hide default navigation bar title
     }
@@ -53,6 +55,7 @@ struct NCBrowserWebView: View {
 
 struct WebView: UIViewRepresentable {
     let url: URL
+    var navigationPolicy: NCWebNavigationPolicy = .unrestricted
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.navigationDelegate = context.coordinator
@@ -78,7 +81,8 @@ struct WebView: UIViewRepresentable {
             }
         }
         public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            decisionHandler(.allow)
+            let allowed = parent.navigationPolicy.allows(navigationAction.request.url, isMainFrame: navigationAction.targetFrame?.isMainFrame)
+            decisionHandler(allowed ? .allow : .cancel)
         }
     }
 }

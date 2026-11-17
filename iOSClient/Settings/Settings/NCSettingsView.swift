@@ -248,7 +248,7 @@ struct NCSettingsView: View {
                 })
                 .tint(Color(NCBrandColor.shared.textColor))
                 .sheet(isPresented: $showBrowser) {
-                    NCBrowserWebView(urlBase: URL(string: NCBrandOptions.shared.privacy)!, browserTitle: NSLocalizedString("_privacy_legal_", comment: ""))
+                    NCBrowserWebView(urlBase: URL(string: NCBrandOptions.shared.privacy)!, browserTitle: NSLocalizedString("_privacy_legal_", comment: ""), navigationPolicy: .singlePage(URL(string: NCBrandOptions.shared.privacy)!))
                 }
                 // Source Code Nextcloud App
                 if !NCBrandOptions.shared.disable_source_code_in_settings {
