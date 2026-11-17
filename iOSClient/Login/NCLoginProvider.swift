@@ -58,6 +58,13 @@ class NCLoginProvider: NSObject, ASWebAuthenticationPresentationContextProviding
             return
         }
 
+        // Xenia: ASWebAuthenticationSession cannot restrict navigation, so the sign-in pages always open in the
+        // in-app web view, which is kept on the sign-in hosts (App Review Guideline 3.1.1, XEN-382).
+        if NCBrandOptions.shared.use_restricted_login_web_view {
+            fallbackToWebView(url: url)
+            return
+        }
+
         // Use custom URL scheme to handle login callbacks (e.g., nc://login/...)
         let callbackScheme = NCBrandOptions.shared.webLoginAutenticationProtocol.replacingOccurrences(of: "://", with: "")
 
@@ -385,7 +392,19 @@ class NCLoginProviderWebViewFallback: UIViewController, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        nkLog(debug: "Web view will allow navigation to \(navigationAction.request.url?.absoluteString ?? "nil")")
+        let url = navigationAction.request.url
+
+        // The login callback (nc://login/...) is handled as before; everything else must stay on the sign-in pages (XEN-382).
+        let isLoginCallback = url?.absoluteString.lowercased().hasPrefix(NCBrandOptions.shared.webLoginAutenticationProtocol) ?? false
+        let policy: NCWebNavigationPolicy = NCBrandOptions.shared.use_restricted_login_web_view ? .login : .unrestricted
+
+        guard isLoginCallback || policy.allows(url, isMainFrame: navigationAction.targetFrame?.isMainFrame) else {
+            nkLog(debug: "Web view blocked navigation to \(url?.absoluteString ?? "nil")")
+            decisionHandler(.cancel)
+            return
+        }
+
+        nkLog(debug: "Web view will allow navigation to \(url?.absoluteString ?? "nil")")
         decisionHandler(.allow)
     }
 

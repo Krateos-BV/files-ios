@@ -70,10 +70,18 @@ final class NCBrandOptions: @unchecked Sendable {
     var linkLoginHost: String = "https://xeniacloud.eu"
     var linkloginPreferredProviders: String = "https://xeniacloud.eu"
     var webLoginAutenticationProtocol: String = "nc://"                                        // example "abc://"
-    var privacy: String = "https://xeniacloud.eu/privacy-policy/"
+    // Same statement as Xenia Notes. Shown in a web view locked to this one page (XEN-382).
+    var privacy: String = "https://xeniacloud.eu/privacy-statement-eu/"
     var sourceCode: String = "https://github.com/Krateos-BV/files-ios"
     var mobileconfig: String = "/remote.php/dav/provisioning/apple-provisioning.mobileconfig"
     var appStoreUrl: String = "" // TODO: set to the Xenia Files App Store URL once the app id exists
+
+    // The login web view may only show pages on these hosts, and never the sign-up (enrollment) flow,
+    // so App Review cannot reach plans or pricing from the sign-in screen (Guideline 3.1.1, XEN-382).
+    // ASWebAuthenticationSession cannot be restricted, so the login always uses the in-app web view.
+    var loginAllowedHosts: Set<String> = ["portal.xeniacloud.eu", "auth.xeniacloud.eu"]
+    var loginBlockedPathFragments: [String] = ["enrollment"]
+    var use_restricted_login_web_view: Bool = true
 
     var doNotAskPasscodeAtStartup: Bool = false
 
@@ -102,7 +110,7 @@ final class NCBrandOptions: @unchecked Sendable {
     var disable_log: Bool = false
     var disable_mobileconfig: Bool = false  
     var disable_show_more_nextcloud_apps_in_settings: Bool = true
-    var disable_source_code_in_settings: Bool = false
+    var disable_source_code_in_settings: Bool = true                                           // XEN-382: GitHub README links to the website
     var enforce_passcode_lock = false
     var enforce_privacyScreenEnabled = false
 
