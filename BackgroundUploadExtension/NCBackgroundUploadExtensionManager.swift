@@ -285,6 +285,13 @@ final class NCBackgroundUploadExtensionManager {
     /// Disables the PhotoKit extension after the feature or auto upload is turned off and no jobs remain.
     /// Active metadata defers disabling so cancellations and terminal results can still be reconciled.
     func disableIfIdle() async -> Bool {
+        // Photos access never asked means the extension was never enabled (enabling needs .authorized).
+        // Querying upload jobs before that shows the system photo prompt on launch, even on the
+        // login screen with no account, which App Review flags as a prompt without context (XEN-389).
+        guard PHPhotoLibrary.authorizationStatus(for: .readWrite) != .notDetermined else {
+            return true
+        }
+
         let featureEnabled = NCPreferences().shouldUseBackgroundUploadExtension
         let account = await database.getTableAccountAsync(predicate: NSPredicate(format: "autoUploadStart == true"))
 
