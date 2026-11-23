@@ -202,7 +202,9 @@ final class NCBrandColor: @unchecked Sendable {
     static let shared = NCBrandColor()
 
     // This is rewrited from customet theme, default is Nextcloud color
-    let customer: UIColor = UIColor(red: 0.0 / 255.0, green: 130.0 / 255.0, blue: 201.0 / 255.0, alpha: 1.0) // Nextcloud default: #0082C9
+    // Xenia brand blue #003399, same value as talk-ios NCAppBranding brandColorHex (XEN-309).
+    // Login background, File Provider UI, colour-picker default and fallback theming colour.
+    let customer: UIColor = UIColor(red: 0.0 / 255.0, green: 51.0 / 255.0, blue: 153.0 / 255.0, alpha: 1.0)
     var customerText: UIColor = .white
 
     // INTERNAL DEFINE COLORS

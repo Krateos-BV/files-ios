@@ -6,7 +6,7 @@
     "contains": "var loginBaseUrl: String = \"https://portal.xeniacloud.eu\""
   },
   "brand_colours": {
-    "mode": "warn",
+    "mode": "fail",
     "shipped_dirs": ["iOSClient", "Brand", "Share", "Widget", "WidgetDashboardIntentHandler",
                      "File Provider Extension", "File Provider Extension UI", "Notification Service Extension",
                      "Action Assistant", "BackgroundUploadExtension"]
